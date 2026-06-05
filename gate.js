@@ -57,7 +57,7 @@ function forwardPgDomMessage(event) {
   forwardPgMessage(data);
 }
 
-// ✅ SINGLE listener only (capture phase)
+// SINGLE listener only (capture phase)
 window.addEventListener(
   "message",
   (event) => {
