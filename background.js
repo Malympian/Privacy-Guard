@@ -13,7 +13,7 @@ const DEFAULT_FEATURES = {
 };
 
 const DEFAULT_BLOCKED_PATTERNS = [
-  "/quiz_submission_sevents",
+  "/quiz_submission_events",
   "/events",
   "/analytics",
   "/error_reports",
