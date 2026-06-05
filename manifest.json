@@ -1,0 +1,44 @@
+{
+  "manifest_version": 3,
+  "name": "Privacy Guard",
+  "version": "1.6.0",
+  "description": "Blocks common tracking beacons and spoofs behavioral event signals on allowed sites only.",
+  "permissions": [
+    "storage",
+    "tabs",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "action": {
+    "default_title": "Privacy Guard — pin this icon to see the status dot",
+    "default_popup": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "gate.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": true
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "guard.js",
+        "observe.js"
+      ],
+      "matches": [
+        "<all_urls>"
+      ]
+    }
+  ]
+}
