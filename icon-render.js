@@ -5,7 +5,6 @@ function drawLockIcon(ctx, size) {
   const s = size;
   const cx = s / 2;
 
-  
   const bg = ctx.createRadialGradient(cx, cx * 0.9, s * 0.05, cx, cx, s * 0.7);
   bg.addColorStop(0, "#1e2d45");
   bg.addColorStop(1, "#0d1520");
@@ -13,27 +12,28 @@ function drawLockIcon(ctx, size) {
   roundRect(ctx, 0, 0, s, s, s * 0.18);
   ctx.fill();
 
-  
   const bodyW = s * 0.62;
   const bodyH = s * 0.42;
   const bodyX = (s - bodyW) / 2;
   const bodyY = s * 0.48;
   const bodyR = s * 0.09;
 
-  
   const shackleOuter = s * 0.22;
   const shackleInner = s * 0.13;
   const shackleCx = cx;
   const shackleCy = bodyY + s * 0.03;
   const shackleTop = bodyY - s * 0.24;
 
-  
   ctx.save();
   ctx.shadowColor = "#f5c542";
   ctx.shadowBlur = s * 0.12;
 
-  
-  const shackleGrad = ctx.createLinearGradient(cx - shackleOuter, shackleTop, cx + shackleOuter, shackleCy);
+  const shackleGrad = ctx.createLinearGradient(
+    cx - shackleOuter,
+    shackleTop,
+    cx + shackleOuter,
+    shackleCy,
+  );
   shackleGrad.addColorStop(0, "#ffe066");
   shackleGrad.addColorStop(0.5, "#f5c000");
   shackleGrad.addColorStop(1, "#c8860a");
@@ -46,13 +46,11 @@ function drawLockIcon(ctx, size) {
   ctx.stroke();
   ctx.restore();
 
-  
   ctx.save();
   ctx.shadowColor = "rgba(0,0,0,0.55)";
   ctx.shadowBlur = s * 0.08;
   ctx.shadowOffsetY = s * 0.03;
 
-  
   const bodyGrad = ctx.createLinearGradient(bodyX, bodyY, bodyX, bodyY + bodyH);
   bodyGrad.addColorStop(0, "#ffe066");
   bodyGrad.addColorStop(0.38, "#f5c000");
@@ -63,15 +61,20 @@ function drawLockIcon(ctx, size) {
   ctx.fill();
   ctx.restore();
 
-  
   ctx.save();
   ctx.globalAlpha = 0.22;
   ctx.fillStyle = "#fff";
-  roundRect(ctx, bodyX + s * 0.04, bodyY + s * 0.025, bodyW - s * 0.08, bodyH * 0.35, bodyR * 0.6);
+  roundRect(
+    ctx,
+    bodyX + s * 0.04,
+    bodyY + s * 0.025,
+    bodyW - s * 0.08,
+    bodyH * 0.35,
+    bodyR * 0.6,
+  );
   ctx.fill();
   ctx.restore();
 
-  
   const khCx = cx;
   const khCy = bodyY + bodyH * 0.42;
   const khR = s * 0.085;
@@ -81,12 +84,10 @@ function drawLockIcon(ctx, size) {
   ctx.shadowBlur = s * 0.04;
   ctx.fillStyle = "#1e2d45";
 
-  
   ctx.beginPath();
   ctx.arc(khCx, khCy, khR, 0, Math.PI * 2);
   ctx.fill();
 
-  
   const stemW = khR * 0.75;
   const stemH = khR * 1.1;
   ctx.fillRect(khCx - stemW / 2, khCy, stemW, stemH);
@@ -114,24 +115,27 @@ function drawBlockCount(ctx, size, count) {
 
   const label = n > 99 ? "99+" : String(n);
 
-  
   const r = Math.max(6, Math.round(size * 0.36));
   const cx = size - r + size * 0.04;
   const cy = size - r + size * 0.04;
 
-  
   ctx.save();
   ctx.shadowColor = "rgba(0,0,0,0.5)";
   ctx.shadowBlur = size * 0.08;
 
-  
   ctx.fillStyle = "rgba(0,0,0,0.45)";
   ctx.beginPath();
   ctx.arc(cx, cy, r + 1.5, 0, Math.PI * 2);
   ctx.fill();
 
-  
-  const badgeGrad = ctx.createRadialGradient(cx - r * 0.2, cy - r * 0.25, 0, cx, cy, r);
+  const badgeGrad = ctx.createRadialGradient(
+    cx - r * 0.2,
+    cy - r * 0.25,
+    0,
+    cx,
+    cy,
+    r,
+  );
   badgeGrad.addColorStop(0, "#ff6a3d");
   badgeGrad.addColorStop(1, "#c0280a");
   ctx.fillStyle = badgeGrad;
@@ -140,7 +144,6 @@ function drawBlockCount(ctx, size, count) {
   ctx.fill();
   ctx.restore();
 
-  
   ctx.save();
   ctx.strokeStyle = "rgba(255,255,255,0.9)";
   ctx.lineWidth = Math.max(1.2, size / 20);
@@ -149,10 +152,10 @@ function drawBlockCount(ctx, size, count) {
   ctx.stroke();
   ctx.restore();
 
-  
-  const fontSize = label.length > 2
-    ? Math.max(7, Math.round(r * 0.88))
-    : Math.max(9, Math.round(r * 1.18));
+  const fontSize =
+    label.length > 2
+      ? Math.max(7, Math.round(r * 0.88))
+      : Math.max(9, Math.round(r * 1.18));
 
   ctx.fillStyle = "#fff";
   ctx.font = `bold ${fontSize}px system-ui, -apple-system, "Segoe UI", sans-serif`;
@@ -175,7 +178,7 @@ async function buildActionIconImageData(_status, blockCount) {
   }
 
   imageDataCache.set(cacheKey, imageData);
-  
+
   if (imageDataCache.size > 60) {
     imageDataCache.delete(imageDataCache.keys().next().value);
   }
