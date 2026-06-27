@@ -6,7 +6,9 @@ function forwardPgMessage(data) {
     if (privacyGuardSeenMessages.has(data.id)) return;
     privacyGuardSeenMessages.add(data.id);
     if (privacyGuardSeenMessages.size > 200) {
-      privacyGuardSeenMessages.delete(privacyGuardSeenMessages.values().next().value);
+      privacyGuardSeenMessages.delete(
+        privacyGuardSeenMessages.values().next().value,
+      );
     }
   }
 
@@ -26,9 +28,7 @@ function forwardPgMessage(data) {
     chrome.runtime.sendMessage(msg, () => {
       void chrome.runtime.lastError;
     });
-  } catch {
-    
-  }
+  } catch {}
 }
 
 function forwardPgDomMessage(event) {
@@ -63,7 +63,7 @@ window.addEventListener(
     if (event.source && event.source !== window) return;
     forwardPgMessage(event.data);
   },
-  true
+  true,
 );
 
 document.addEventListener("__privacyGuardMessage", forwardPgDomMessage, true);
@@ -90,14 +90,18 @@ function requestInject() {
       if (!response?.inject) return;
 
       injectConfigAndGuard(response.config);
-    }
+    },
   );
 }
 
 if (document.documentElement) {
   requestInject();
 } else {
-  document.addEventListener("readystatechange", () => {
-    if (document.documentElement) requestInject();
-  }, { once: true });
+  document.addEventListener(
+    "readystatechange",
+    () => {
+      if (document.documentElement) requestInject();
+    },
+    { once: true },
+  );
 }
