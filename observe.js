@@ -5,7 +5,10 @@
       globalThis.__privacyGuardObservedQueue ??= [];
       globalThis.__privacyGuardObservedQueue.push(message.detail);
       if (globalThis.__privacyGuardObservedQueue.length > 100) {
-        globalThis.__privacyGuardObservedQueue.splice(0, globalThis.__privacyGuardObservedQueue.length - 100);
+        globalThis.__privacyGuardObservedQueue.splice(
+          0,
+          globalThis.__privacyGuardObservedQueue.length - 100,
+        );
       }
     }
     window.postMessage(message, "*");
@@ -13,15 +16,20 @@
     try {
       const raw = JSON.stringify(message);
       document.documentElement.dataset.privacyGuardMessage = raw;
-      document.dispatchEvent(new CustomEvent("__privacyGuardMessage", { detail: raw }));
-    } catch {
-      
-    }
+      document.dispatchEvent(
+        new CustomEvent("__privacyGuardMessage", { detail: raw }),
+      );
+    } catch {}
   }
 
-  if (globalThis.__privacyGuardInstalled && globalThis.__privacyGuardObservesRequests) {
+  if (
+    globalThis.__privacyGuardInstalled &&
+    globalThis.__privacyGuardObservesRequests
+  ) {
     emitPgMessage({ __privacyGuard: true, type: "observeReady" });
-    console.info("[privacy-guard] protection already running — URL watch is active");
+    console.info(
+      "[privacy-guard] protection already running — URL watch is active",
+    );
     return;
   }
   if (globalThis.__privacyGuardObserve) return;
@@ -33,7 +41,11 @@
   function emit(url, via) {
     const s = url instanceof Request ? url.url : String(url ?? "");
     if (!s || !HEURISTIC.test(s)) return;
-    emitPgMessage({ __privacyGuard: true, type: "observe", detail: { url: s, via } });
+    emitPgMessage({
+      __privacyGuard: true,
+      type: "observe",
+      detail: { url: s, via },
+    });
   }
 
   emitPgMessage({ __privacyGuard: true, type: "observeReady" });
