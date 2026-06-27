@@ -1,47 +1,47 @@
-const enabledEl          = document.getElementById("enabled");
-const inputEl            = document.getElementById("domain-input");
-const allowlistEl        = document.getElementById("allowlist");
-const siteSectionEl      = document.getElementById("current-site");
-const activityEl         = document.getElementById("activity");
-const discoverEl         = document.getElementById("panel-discover");
-const noTabMsgEl         = document.getElementById("no-tab-msg");
-const quickActionsEl     = document.getElementById("quick-actions");
-const siteTitleLabelEl   = document.getElementById("site-title-label");
-const siteStatusEl       = document.getElementById("site-status");
-const statusBadgeEl      = document.getElementById("status-badge");
-const statusLabelEl      = document.getElementById("status-label");
-const siteCustomEl       = document.getElementById("site-use-custom");
-const blockBigEl         = document.getElementById("block-big");
-const blockSubEl         = document.getElementById("block-sub");
-const blockLogEl         = document.getElementById("block-log");
-const snoozeStatusEl     = document.getElementById("snooze-status");
-const snoozeHoursEl      = document.getElementById("snooze-hours");
-const snoozeMinEl        = document.getElementById("snooze-minutes");
-const discoverStatEl     = document.getElementById("discover-status");
-const discoverListEl     = document.getElementById("discover-list");
-const headerStatusEl     = document.getElementById("header-status");
-const headerStatusLabelEl= document.getElementById("header-status-label");
-const navBlockBadgeEl    = document.getElementById("nav-block-badge");
+const enabledEl = document.getElementById("enabled");
+const inputEl = document.getElementById("domain-input");
+const allowlistEl = document.getElementById("allowlist");
+const siteSectionEl = document.getElementById("current-site");
+const activityEl = document.getElementById("activity");
+const discoverEl = document.getElementById("panel-discover");
+const noTabMsgEl = document.getElementById("no-tab-msg");
+const quickActionsEl = document.getElementById("quick-actions");
+const siteTitleLabelEl = document.getElementById("site-title-label");
+const siteStatusEl = document.getElementById("site-status");
+const statusBadgeEl = document.getElementById("status-badge");
+const statusLabelEl = document.getElementById("status-label");
+const siteCustomEl = document.getElementById("site-use-custom");
+const blockBigEl = document.getElementById("block-big");
+const blockSubEl = document.getElementById("block-sub");
+const blockLogEl = document.getElementById("block-log");
+const snoozeStatusEl = document.getElementById("snooze-status");
+const snoozeHoursEl = document.getElementById("snooze-hours");
+const snoozeMinEl = document.getElementById("snooze-minutes");
+const discoverStatEl = document.getElementById("discover-status");
+const discoverListEl = document.getElementById("discover-list");
+const headerStatusEl = document.getElementById("header-status");
+const headerStatusLabelEl = document.getElementById("header-status-label");
+const navBlockBadgeEl = document.getElementById("nav-block-badge");
 const navDiscoverBadgeEl = document.getElementById("nav-discover-badge");
 const navExceptionsBadgeEl = document.getElementById("nav-exceptions-badge");
-const exceptionsListEl   = document.getElementById("exceptions-list");
-const reloadNoticeEl     = document.getElementById("reload-notice");
-const featuresHintEl     = document.getElementById("features-hint");
+const exceptionsListEl = document.getElementById("exceptions-list");
+const reloadNoticeEl = document.getElementById("reload-notice");
+const featuresHintEl = document.getElementById("features-hint");
 
 const sessionBtns = {
   default: document.getElementById("session-default"),
-  active:  document.getElementById("session-active"),
-  paused:  document.getElementById("session-paused"),
+  active: document.getElementById("session-active"),
+  paused: document.getElementById("session-paused"),
 };
 
-let currentTabId       = null;
-let currentHost        = null;
+let currentTabId = null;
+let currentHost = null;
 let currentSessionMode = "default";
-let editingSiteCustom  = false;
+let editingSiteCustom = false;
 
-const menuBtnEl   = document.getElementById("menu-btn");
+const menuBtnEl = document.getElementById("menu-btn");
 const navDrawerEl = document.getElementById("nav-drawer");
-const overlayEl   = document.getElementById("drawer-overlay");
+const overlayEl = document.getElementById("drawer-overlay");
 
 function openDrawer() {
   navDrawerEl.classList.add("open");
@@ -54,30 +54,33 @@ function closeDrawer() {
   menuBtnEl.classList.remove("open");
 }
 menuBtnEl.addEventListener("click", () =>
-  navDrawerEl.classList.contains("open") ? closeDrawer() : openDrawer()
+  navDrawerEl.classList.contains("open") ? closeDrawer() : openDrawer(),
 );
 overlayEl.addEventListener("click", closeDrawer);
 
-const panels   = document.querySelectorAll(".panel");
+const panels = document.querySelectorAll(".panel");
 const navItems = document.querySelectorAll(".nav-item[data-panel]");
 
 function showPanel(id) {
-  panels.forEach(p => p.classList.toggle("active", p.id === "panel-" + id));
-  navItems.forEach(n => n.classList.toggle("active", n.dataset.panel === id));
+  panels.forEach((p) => p.classList.toggle("active", p.id === "panel-" + id));
+  navItems.forEach((n) => n.classList.toggle("active", n.dataset.panel === id));
   closeDrawer();
-  
+
   if (id === "exceptions") renderExceptions();
-  if (id === "discover")   renderDiscover();
+  if (id === "discover") renderDiscover();
 }
 
-navItems.forEach(btn => {
+navItems.forEach((btn) => {
   btn.addEventListener("click", () => showPanel(btn.dataset.panel));
 });
 
 function normalizeDomain(raw) {
   let s = raw.trim().toLowerCase();
   if (!s) return "";
-  s = s.replace(/^https?:\/\//, "").split("/")[0].split(":")[0];
+  s = s
+    .replace(/^https?:\/\//, "")
+    .split("/")[0]
+    .split(":")[0];
   if (s.startsWith("www.")) s = s.slice(4);
   return s;
 }
@@ -87,7 +90,7 @@ function normalizeHost(hostname) {
   return h;
 }
 function hostOnAllowlist(host, allowlist) {
-  return (allowlist ?? []).some(entry => {
+  return (allowlist ?? []).some((entry) => {
     let rule = entry.trim().toLowerCase();
     if (!rule) return false;
     if (rule.startsWith("*.")) rule = rule.slice(2);
@@ -95,24 +98,30 @@ function hostOnAllowlist(host, allowlist) {
   });
 }
 async function sendBg(msg) {
-  try { return (await chrome.runtime.sendMessage(msg)) ?? {}; }
-  catch { return {}; }
+  try {
+    return (await chrome.runtime.sendMessage(msg)) ?? {};
+  } catch {
+    return {};
+  }
 }
 function refreshBadge() {
-  chrome.runtime.sendMessage({ type: "refreshBadge", tabId: currentTabId ?? -1 });
-  chrome.tabs.query({ active: true, currentWindow: true }, tabs => {
+  chrome.runtime.sendMessage({
+    type: "refreshBadge",
+    tabId: currentTabId ?? -1,
+  });
+  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     if (tabs[0]?.id != null)
       chrome.runtime.sendMessage({ type: "refreshBadge", tabId: tabs[0].id });
   });
 }
 async function readSync() {
   return chrome.storage.sync.get({
-    enabled:       true,
-    allowlist:     [],
-    features:      { ...DEFAULT_FEATURES },
+    enabled: true,
+    allowlist: [],
+    features: { ...DEFAULT_FEATURES },
     siteOverrides: {},
-    customPatterns:[],
-    exceptions:    [],   
+    customPatterns: [],
+    exceptions: [],
   });
 }
 async function readSession() {
@@ -132,7 +141,10 @@ function showReloadNotice() {
 }
 
 function setHeaderStatus(state, label) {
-  if (!currentHost) { headerStatusEl.classList.add("hidden"); return; }
+  if (!currentHost) {
+    headerStatusEl.classList.add("hidden");
+    return;
+  }
   headerStatusEl.className = "header-status " + state;
   headerStatusLabelEl.textContent = label;
   headerStatusEl.classList.remove("hidden");
@@ -148,12 +160,14 @@ function setStatusBadge(state, label, detail) {
 function initSnoozePickers() {
   for (let h = 0; h <= 24; h++) {
     const o = document.createElement("option");
-    o.value = h; o.textContent = h;
+    o.value = h;
+    o.textContent = h;
     snoozeHoursEl.appendChild(o);
   }
   for (let m = 0; m < 60; m++) {
     const o = document.createElement("option");
-    o.value = m; o.textContent = String(m).padStart(2, "0");
+    o.value = m;
+    o.textContent = String(m).padStart(2, "0");
     snoozeMinEl.appendChild(o);
   }
   snoozeHoursEl.value = "0";
@@ -191,7 +205,7 @@ function renderAllowlist(allowlist) {
     btn.title = "Remove";
     btn.addEventListener("click", async () => {
       const cfg = await readSync();
-      const next = cfg.allowlist.filter(d => d !== domain);
+      const next = cfg.allowlist.filter((d) => d !== domain);
       await chrome.storage.sync.set({ allowlist: next });
       renderAllowlist(next);
       await refreshSiteStatus();
@@ -207,7 +221,10 @@ async function addDomain(raw) {
   if (!domain) return;
   const cfg = await readSync();
   const list = cfg.allowlist ?? [];
-  if (list.includes(domain)) { inputEl.value = ""; return; }
+  if (list.includes(domain)) {
+    inputEl.value = "";
+    return;
+  }
   const next = [...list, domain].sort();
   await chrome.storage.sync.set({ allowlist: next });
   inputEl.value = "";
@@ -217,66 +234,96 @@ async function addDomain(raw) {
 }
 
 const KEY_EVENTS = {
-  
-  blockTrackingRequests:  ["fetch", "XHR", "sendBeacon"],
-  blockTrackingPixels:    ["img.src"],
-  blockKnownTrackers:     ["domain", "hostname"],
-  blockWebRTC:            ["RTCPeerConnection", "webkitRTCPeerConnection"],
-  blockBattery:           ["navigator.getBattery()"],
-  
-  spoofCamera:            ["getUserMedia", "video track"],
-  blockCamera:            ["getUserMedia", "video"],
-  spoofMicrophone:        ["getUserMedia", "audio track"],
-  blockMicrophone:        ["getUserMedia", "audio"],
-  
-  spoofTabVisibility:     ["visibilitychange", "document.hidden"],
-  spoofFocus:             ["focus", "blur", "focusin", "focusout", "hasFocus()"],
-  
-  blockTabEnumeration:    ["BroadcastChannel", "SharedWorker", "storage"],
-  
-  spoofReferrer:          ["document.referrer"],
-  blockCacheTimingProbe:  ["transferSize", "PerformanceObserver"],
-  
-  spoofScreenSize:        ["screen.width", "screen.height", "outerWidth", "outerHeight"],
-  spoofScrollDepth:       ["scrollY", "scrollX", "pageYOffset", "scrollTop"],
-  spoofPerformanceTiming: ["performance.now()", "requestAnimationFrame", "Date.now()"],
-  
-  spoofKeyboardTiming:    ["keydown", "keyup", "keypress"],
-  blockKeyboardEvents:    ["keydown", "keyup", "keypress"],
-  
-  spoofMouseMovement:     ["mousemove", "mousedown", "mouseup", "pointermove", "MouseEvent.prototype"],
-  blockMouseEvents:       ["mousemove", "mousedown", "mouseup", "pointermove"],
-  
-  spoofClicks:            ["click", "dblclick", "contextmenu"],
-  blockClickEvents:       ["click", "dblclick", "contextmenu"],
-  
-  spoofTouch:             ["touchstart", "touchend", "touchmove"],
-  blockTouchEvents:       ["touchstart", "touchend", "touchmove"],
-  
-  spoofFormInput:         ["input", "change"],
-  blockFormEvents:        ["input", "change"],
-  
-  blockClipboard:         ["copy", "cut", "paste"],
-  blockSelection:         ["selectionchange", "selectstart"],
-  
-  spoofScreenCapture:     ["getDisplayMedia", "pixelated"],
-  blockScreenCapture:     ["getDisplayMedia", "captureStream"],
-  
-  blockScrollTracking:    ["scroll", "wheel", "scrollend"],
+  blockTrackingRequests: ["fetch", "XHR", "sendBeacon"],
+  blockTrackingPixels: ["img.src"],
+  blockKnownTrackers: ["domain", "hostname"],
+  blockWebRTC: ["RTCPeerConnection", "webkitRTCPeerConnection"],
+  blockBattery: ["navigator.getBattery()"],
+
+  spoofCamera: ["getUserMedia", "video track"],
+  blockCamera: ["getUserMedia", "video"],
+  spoofMicrophone: ["getUserMedia", "audio track"],
+  blockMicrophone: ["getUserMedia", "audio"],
+
+  spoofTabVisibility: ["visibilitychange", "document.hidden"],
+  spoofFocus: ["focus", "blur", "focusin", "focusout", "hasFocus()"],
+
+  blockTabEnumeration: ["BroadcastChannel", "SharedWorker", "storage"],
+
+  spoofReferrer: ["document.referrer"],
+  blockCacheTimingProbe: ["transferSize", "PerformanceObserver"],
+
+  spoofScreenSize: [
+    "screen.width",
+    "screen.height",
+    "outerWidth",
+    "outerHeight",
+  ],
+  spoofScrollDepth: ["scrollY", "scrollX", "pageYOffset", "scrollTop"],
+  spoofPerformanceTiming: [
+    "performance.now()",
+    "requestAnimationFrame",
+    "Date.now()",
+  ],
+
+  spoofKeyboardTiming: ["keydown", "keyup", "keypress"],
+  blockKeyboardEvents: ["keydown", "keyup", "keypress"],
+
+  spoofMouseMovement: [
+    "mousemove",
+    "mousedown",
+    "mouseup",
+    "pointermove",
+    "MouseEvent.prototype",
+  ],
+  blockMouseEvents: ["mousemove", "mousedown", "mouseup", "pointermove"],
+
+  spoofClicks: ["click", "dblclick", "contextmenu"],
+  blockClickEvents: ["click", "dblclick", "contextmenu"],
+
+  spoofTouch: ["touchstart", "touchend", "touchmove"],
+  blockTouchEvents: ["touchstart", "touchend", "touchmove"],
+
+  spoofFormInput: ["input", "change"],
+  blockFormEvents: ["input", "change"],
+
+  blockClipboard: ["copy", "cut", "paste"],
+  blockSelection: ["selectionchange", "selectstart"],
+
+  spoofScreenCapture: ["getDisplayMedia", "pixelated"],
+  blockScreenCapture: ["getDisplayMedia", "captureStream"],
+
+  blockScrollTracking: ["scroll", "wheel", "scrollend"],
 };
 
 const BLOCKING_KEYS = new Set([
-  "blockTrackingRequests", "blockTrackingPixels", "blockKnownTrackers",
-  "blockWebRTC", "blockBattery",
-  "blockClipboard", "blockSelection", "blockScrollTracking",
-  "blockKeyboardEvents", "blockMouseEvents", "blockClickEvents",
-  "blockTouchEvents", "blockFormEvents",
+  "blockTrackingRequests",
+  "blockTrackingPixels",
+  "blockKnownTrackers",
+  "blockWebRTC",
+  "blockBattery",
+  "blockClipboard",
+  "blockSelection",
+  "blockScrollTracking",
+  "blockKeyboardEvents",
+  "blockMouseEvents",
+  "blockClickEvents",
+  "blockTouchEvents",
+  "blockFormEvents",
   "blockTabEnumeration",
 ]);
 
 function getFeaturesForEditing(sync) {
-  if (editingSiteCustom && currentHost && sync.siteOverrides?.[currentHost]?.features)
-    return { ...DEFAULT_FEATURES, ...sync.features, ...sync.siteOverrides[currentHost].features };
+  if (
+    editingSiteCustom &&
+    currentHost &&
+    sync.siteOverrides?.[currentHost]?.features
+  )
+    return {
+      ...DEFAULT_FEATURES,
+      ...sync.features,
+      ...sync.siteOverrides[currentHost].features,
+    };
   return { ...DEFAULT_FEATURES, ...sync.features };
 }
 
@@ -286,7 +333,6 @@ function renderFeaturesInto(containerEl, keysFilter, sync) {
   const disabled = !sync.enabled;
   containerEl.classList.toggle("disabled", disabled);
 
-  
   const childrenOf = {};
   for (const meta of SETTINGS_META) {
     if (meta.parentKey) {
@@ -321,7 +367,7 @@ function renderFeaturesInto(containerEl, keysFilter, sync) {
 
     const tags = document.createElement("div");
     tags.className = "event-tags";
-    (KEY_EVENTS[key] ?? []).forEach(ev => {
+    (KEY_EVENTS[key] ?? []).forEach((ev) => {
       const t = document.createElement("span");
       t.className = "event-tag";
       t.textContent = ev;
@@ -329,12 +375,10 @@ function renderFeaturesInto(containerEl, keysFilter, sync) {
     });
 
     cb.addEventListener("change", async () => {
-      
-      
-      
-      
       if (cb.checked && itemParentKey && itemParentKey.startsWith("spoof")) {
-        const parentItem = containerEl.querySelector(`[data-feature-key="${itemParentKey}"]`);
+        const parentItem = containerEl.querySelector(
+          `[data-feature-key="${itemParentKey}"]`,
+        );
         if (parentItem) {
           const parentCb = parentItem.querySelector("input[type=checkbox]");
           if (parentCb && parentCb.checked) {
@@ -343,9 +387,16 @@ function renderFeaturesInto(containerEl, keysFilter, sync) {
             const updates = { [key]: true, [itemParentKey]: false };
             if (editingSiteCustom && currentHost) {
               const so = { ...cfg.siteOverrides };
-              const entry = so[currentHost] ?? { useCustom: true, features: {} };
+              const entry = so[currentHost] ?? {
+                useCustom: true,
+                features: {},
+              };
               entry.useCustom = true;
-              entry.features = { ...DEFAULT_FEATURES, ...entry.features, ...updates };
+              entry.features = {
+                ...DEFAULT_FEATURES,
+                ...entry.features,
+                ...updates,
+              };
               so[currentHost] = entry;
               await chrome.storage.sync.set({ siteOverrides: so });
               siteCustomEl.checked = true;
@@ -354,24 +405,23 @@ function renderFeaturesInto(containerEl, keysFilter, sync) {
                 features: { ...DEFAULT_FEATURES, ...cfg.features, ...updates },
               });
             }
-            return; 
+            return;
           }
         }
       }
 
-      
-      
-      
       const siblingUpdates = {};
       if (cb.checked && key.startsWith("spoof")) {
-        containerEl.querySelectorAll(`[data-parent-key="${key}"]`).forEach(childItem => {
-          const childKey = childItem.dataset.featureKey;
-          const childCb  = childItem.querySelector("input[type=checkbox]");
-          if (childKey?.startsWith("block") && childCb?.checked) {
-            childCb.checked = false;
-            siblingUpdates[childKey] = false;
-          }
-        });
+        containerEl
+          .querySelectorAll(`[data-parent-key="${key}"]`)
+          .forEach((childItem) => {
+            const childKey = childItem.dataset.featureKey;
+            const childCb = childItem.querySelector("input[type=checkbox]");
+            if (childKey?.startsWith("block") && childCb?.checked) {
+              childCb.checked = false;
+              siblingUpdates[childKey] = false;
+            }
+          });
       }
 
       const cfg = await readSync();
@@ -380,7 +430,11 @@ function renderFeaturesInto(containerEl, keysFilter, sync) {
         const so = { ...cfg.siteOverrides };
         const entry = so[currentHost] ?? { useCustom: true, features: {} };
         entry.useCustom = true;
-        entry.features = { ...DEFAULT_FEATURES, ...entry.features, ...allUpdates };
+        entry.features = {
+          ...DEFAULT_FEATURES,
+          ...entry.features,
+          ...allUpdates,
+        };
         so[currentHost] = entry;
         await chrome.storage.sync.set({ siteOverrides: so });
         siteCustomEl.checked = true;
@@ -389,12 +443,14 @@ function renderFeaturesInto(containerEl, keysFilter, sync) {
           features: { ...DEFAULT_FEATURES, ...cfg.features, ...allUpdates },
         });
       }
-      
-      containerEl.querySelectorAll(`[data-parent-key="${key}"]`).forEach(childItem => {
-        const childCb = childItem.querySelector("input[type=checkbox]");
-        if (childCb) childCb.disabled = !cb.checked || isDisabled;
-        childItem.classList.toggle("feat-child-off", !cb.checked);
-      });
+
+      containerEl
+        .querySelectorAll(`[data-parent-key="${key}"]`)
+        .forEach((childItem) => {
+          const childCb = childItem.querySelector("input[type=checkbox]");
+          if (childCb) childCb.disabled = !cb.checked || isDisabled;
+          childItem.classList.toggle("feat-child-off", !cb.checked);
+        });
     });
 
     item.append(top, hintEl, tags);
@@ -403,16 +459,21 @@ function renderFeaturesInto(containerEl, keysFilter, sync) {
 
   for (const { key, label, hint, parentKey } of SETTINGS_META) {
     if (!keysFilter(key)) continue;
-    if (parentKey) continue; 
+    if (parentKey) continue;
 
     const { item } = makeFeatureItem(key, label, hint, disabled);
     containerEl.appendChild(item);
 
-    
-    const children = (childrenOf[key] ?? []).filter(c => keysFilter(c.key));
+    const children = (childrenOf[key] ?? []).filter((c) => keysFilter(c.key));
     for (const child of children) {
       const childDisabled = disabled || !features[key];
-      const { item: childItem } = makeFeatureItem(child.key, child.label, child.hint, childDisabled, key);
+      const { item: childItem } = makeFeatureItem(
+        child.key,
+        child.label,
+        child.hint,
+        childDisabled,
+        key,
+      );
       childItem.classList.add("feat-child");
       childItem.dataset.parentKey = key;
       if (childDisabled) childItem.classList.add("feat-child-off");
@@ -424,27 +485,39 @@ function renderFeaturesInto(containerEl, keysFilter, sync) {
 function renderFeatures(sync) {
   const blockingEl = document.getElementById("features-list-blocking");
   const spoofingEl = document.getElementById("features-list-spoofing");
-  
-  renderFeaturesInto(blockingEl, k => {
-    const meta = SETTINGS_META.find(m => m.key === k);
-    return BLOCKING_KEYS.has(k) && !meta?.parentKey;
-  }, sync);
-  
-  renderFeaturesInto(spoofingEl, k => {
-    return !BLOCKING_KEYS.has(k) || SETTINGS_META.find(m => m.key === k)?.parentKey;
-  }, sync);
+
+  renderFeaturesInto(
+    blockingEl,
+    (k) => {
+      const meta = SETTINGS_META.find((m) => m.key === k);
+      return BLOCKING_KEYS.has(k) && !meta?.parentKey;
+    },
+    sync,
+  );
+
+  renderFeaturesInto(
+    spoofingEl,
+    (k) => {
+      return (
+        !BLOCKING_KEYS.has(k) ||
+        SETTINGS_META.find((m) => m.key === k)?.parentKey
+      );
+    },
+    sync,
+  );
 
   if (featuresHintEl)
-    featuresHintEl.textContent = editingSiteCustom && currentHost
-      ? `Custom settings — ${currentHost}`
-      : "Behavioral Spoofing";
+    featuresHintEl.textContent =
+      editingSiteCustom && currentHost
+        ? `Custom settings — ${currentHost}`
+        : "Behavioral Spoofing";
 }
 
 async function renderBlockLog() {
   if (currentTabId == null) return;
-  const stats   = await sendBg({ type: "getTabStats", tabId: currentTabId });
-  const count   = stats?.count   ?? 0;
-  const log     = stats?.log     ?? [];
+  const stats = await sendBg({ type: "getTabStats", tabId: currentTabId });
+  const count = stats?.count ?? 0;
+  const log = stats?.log ?? [];
   const grouped = stats?.grouped ?? {};
 
   blockBigEl.textContent = count;
@@ -466,39 +539,51 @@ async function renderBlockLog() {
 
   blockLogEl.textContent = "";
 
-  
-  
   const groupedValues = Object.values(grouped);
   const entries = groupedValues.length
     ? groupedValues.sort((a, b) => (b.hits ?? 0) - (a.hits ?? 0)).slice(0, 15)
-    : log.slice(0, 15).map(e => ({ url: e.url, hits: 1, lastSeen: e.at }));
+    : log.slice(0, 15).map((e) => ({ url: e.url, hits: 1, lastSeen: e.at }));
 
   for (const entry of entries) {
     const li = document.createElement("li");
 
-    
     const metaEl = document.createElement("span");
     metaEl.className = "t";
-    const lastTime  = new Date(entry.lastSeen ?? entry.at ?? 0).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-    const firstTime = entry.firstSeen ? new Date(entry.firstSeen).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : null;
+    const lastTime = new Date(
+      entry.lastSeen ?? entry.at ?? 0,
+    ).toLocaleTimeString([], {
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    });
+    const firstTime = entry.firstSeen
+      ? new Date(entry.firstSeen).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        })
+      : null;
     const hits = entry.hits ?? 1;
     metaEl.textContent = hits > 1 ? `${hits}×` : lastTime;
-    metaEl.title = [
-      hits > 1 ? `Last blocked: ${lastTime}` : null,
-      firstTime && hits > 1 ? `First seen: ${firstTime}` : null,
-      hits > 1 ? `${hits} times` : null,
-    ].filter(Boolean).join("\n") || lastTime;
+    metaEl.title =
+      [
+        hits > 1 ? `Last blocked: ${lastTime}` : null,
+        firstTime && hits > 1 ? `First seen: ${firstTime}` : null,
+        hits > 1 ? `${hits} times` : null,
+      ]
+        .filter(Boolean)
+        .join("\n") || lastTime;
 
     const urlEl = document.createElement("span");
     urlEl.className = "log-url";
     urlEl.textContent = entry.url;
     urlEl.title = entry.url;
 
-    
     const allowBtn = document.createElement("button");
     allowBtn.className = "log-allow-btn";
     allowBtn.textContent = "Allow";
-    allowBtn.title = "Add exception — this URL will be allowed even if it matches a block rule";
+    allowBtn.title =
+      "Add exception — this URL will be allowed even if it matches a block rule";
     allowBtn.addEventListener("click", async () => {
       allowBtn.disabled = true;
       allowBtn.textContent = "…";
@@ -534,17 +619,20 @@ async function syncObservedQueue() {
       world: "MAIN",
       func: () => {
         const queue = Array.isArray(globalThis.__privacyGuardObservedQueue)
-          ? globalThis.__privacyGuardObservedQueue : [];
+          ? globalThis.__privacyGuardObservedQueue
+          : [];
         globalThis.__privacyGuardObservedQueue = [];
         return queue.slice(0, 100);
       },
     });
     if (result.length) {
-      await sendBg({ type: "recordObservedForTab", tabId: currentTabId, items: result });
+      await sendBg({
+        type: "recordObservedForTab",
+        tabId: currentTabId,
+        items: result,
+      });
     }
-  } catch {
-    
-  }
+  } catch {}
 }
 
 function patternFromUrl(rawUrl) {
@@ -559,7 +647,10 @@ async function renderDiscover() {
   if (currentTabId == null || !discoverListEl) return;
   await syncObservedQueue();
 
-  const { items = [] } = await sendBg({ type: "getDiscovered", tabId: currentTabId });
+  const { items = [] } = await sendBg({
+    type: "getDiscovered",
+    tabId: currentTabId,
+  });
   discoverListEl.textContent = "";
   setDiscoverPing(items.length);
 
@@ -570,9 +661,8 @@ async function renderDiscover() {
     return;
   }
 
-  
   items.sort((a, b) => {
-    const rank = x => x.blocked ? 0 : x.isExcepted ? 1 : 2;
+    const rank = (x) => (x.blocked ? 0 : x.isExcepted ? 1 : 2);
     const r = rank(a) - rank(b);
     return r !== 0 ? r : (b.hits ?? 0) - (a.hits ?? 0);
   });
@@ -583,32 +673,40 @@ async function renderDiscover() {
     const li = document.createElement("li");
     li.className = [
       "disc-entry",
-      item.blocked    ? "is-blocked"  : "",
+      item.blocked ? "is-blocked" : "",
       item.isExcepted ? "is-excepted" : "",
-    ].filter(Boolean).join(" ");
+    ]
+      .filter(Boolean)
+      .join(" ");
 
     const body = document.createElement("div");
     body.className = "disc-body";
 
-    
     const urlRow = document.createElement("div");
     urlRow.className = "disc-urlrow";
 
     const badge = document.createElement("span");
-    badge.className = "disc-decision " + (
-      item.blocked    ? "dec-block"  :
-      item.isExcepted ? "dec-except" : "dec-allow"
-    );
-    badge.textContent = item.blocked ? "BLOCKED" : item.isExcepted ? "EXCEPTED" : "ALLOWED";
+    badge.className =
+      "disc-decision " +
+      (item.blocked
+        ? "dec-block"
+        : item.isExcepted
+          ? "dec-except"
+          : "dec-allow");
+    badge.textContent = item.blocked
+      ? "BLOCKED"
+      : item.isExcepted
+        ? "EXCEPTED"
+        : "ALLOWED";
 
     const urlText = document.createElement("span");
     urlText.className = "disc-url-text";
-    urlText.textContent = item.url.length > 90 ? item.url.slice(0, 90) + "…" : item.url;
+    urlText.textContent =
+      item.url.length > 90 ? item.url.slice(0, 90) + "…" : item.url;
     urlText.title = item.url;
 
     urlRow.append(badge, urlText);
 
-    
     if (item.matchedPatterns?.length) {
       const tagRow = document.createElement("div");
       tagRow.className = "disc-tags";
@@ -623,14 +721,26 @@ async function renderDiscover() {
       body.append(urlRow);
     }
 
-    
     const meta = document.createElement("div");
     meta.className = "disc-meta";
-    const lastT  = item.lastSeen  ? new Date(item.lastSeen).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : null;
-    const firstT = item.firstSeen ? new Date(item.firstSeen).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }) : null;
-    const hitsLabel = (item.hits ?? 1) > 1
-      ? `${item.hits}× via ${item.via || "?"}`
-      : `via ${item.via || "?"}`;
+    const lastT = item.lastSeen
+      ? new Date(item.lastSeen).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        })
+      : null;
+    const firstT = item.firstSeen
+      ? new Date(item.firstSeen).toLocaleTimeString([], {
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        })
+      : null;
+    const hitsLabel =
+      (item.hits ?? 1) > 1
+        ? `${item.hits}× via ${item.via || "?"}`
+        : `via ${item.via || "?"}`;
     const parts = [
       hitsLabel,
       item.reason ? `matched: ${item.reason}` : null,
@@ -640,9 +750,7 @@ async function renderDiscover() {
     meta.textContent = parts.join(" · ");
     body.appendChild(meta);
 
-    
     if (item.blocked && !item.isExcepted) {
-      
       const allowBtn = document.createElement("button");
       allowBtn.className = "disc-action-btn disc-allow-btn";
       allowBtn.textContent = "Allow this URL";
@@ -658,7 +766,7 @@ async function renderDiscover() {
           badge.className = "disc-decision dec-except";
           badge.textContent = "EXCEPTED";
           showReloadNotice();
-          
+
           const { exceptions = [] } = await sendBg({ type: "getExceptions" });
           updateExceptionsBadge(countRelevantExceptions(exceptions));
         } else {
@@ -667,9 +775,7 @@ async function renderDiscover() {
         }
       });
       body.appendChild(allowBtn);
-
     } else if (item.isExcepted) {
-      
       const reblockBtn = document.createElement("button");
       reblockBtn.className = "disc-action-btn disc-reblock-btn";
       reblockBtn.textContent = "Re-block";
@@ -678,7 +784,10 @@ async function renderDiscover() {
         reblockBtn.disabled = true;
         reblockBtn.textContent = "…";
         let pattern = item.url;
-        try { const u = new URL(item.url); pattern = u.origin + u.pathname; } catch {}
+        try {
+          const u = new URL(item.url);
+          pattern = u.origin + u.pathname;
+        } catch {}
         const res = await sendBg({ type: "removeException", pattern });
         if (res?.ok) {
           reblockBtn.textContent = "✓ Re-blocked (reload to apply)";
@@ -689,15 +798,13 @@ async function renderDiscover() {
         }
       });
       body.appendChild(reblockBtn);
-
     } else {
-      
       const wrapper = document.createElement("label");
       wrapper.className = "disc-check-row";
 
       const cb = document.createElement("input");
       cb.type = "checkbox";
-      cb.dataset.pattern = patternFromUrl(item.url); 
+      cb.dataset.pattern = patternFromUrl(item.url);
       cb.dataset.url = item.url;
 
       wrapper.append(cb, document.createTextNode(" Add to block rules"));
@@ -717,9 +824,12 @@ function updateExceptionsBadge(count) {
 
 function countRelevantExceptions(exceptions) {
   if (!currentHost) return 0;
-  return exceptions.filter(e => {
-    try { return normalizeHost(new URL(e).hostname) === currentHost; }
-    catch { return false; }
+  return exceptions.filter((e) => {
+    try {
+      return normalizeHost(new URL(e).hostname) === currentHost;
+    } catch {
+      return false;
+    }
   }).length;
 }
 
@@ -780,25 +890,45 @@ async function setTabSession(mode) {
 
 async function refreshSiteStatus() {
   if (!currentHost) return;
-  const sync    = await readSync();
+  const sync = await readSync();
   const session = await readSession();
-  const onList    = hostOnAllowlist(currentHost, sync.allowlist ?? []);
-  const paused    = currentSessionMode === "paused";
+  const onList = hostOnAllowlist(currentHost, sync.allowlist ?? []);
+  const paused = currentSessionMode === "paused";
   const sessionOn = currentSessionMode === "active";
-  const snoozed   = Date.now() < (session.snoozeUntil ?? 0);
+  const snoozed = Date.now() < (session.snoozeUntil ?? 0);
 
   if (!sync.enabled) {
     setStatusBadge("off", "Disabled", "Extension is turned off globally.");
   } else if (snoozed) {
-    setStatusBadge("paused", "Snoozed", "Protection paused everywhere temporarily.");
+    setStatusBadge(
+      "paused",
+      "Snoozed",
+      "Protection paused everywhere temporarily.",
+    );
   } else if (paused) {
-    setStatusBadge("paused", "Paused", "Forced off on this tab until it closes.");
+    setStatusBadge(
+      "paused",
+      "Paused",
+      "Forced off on this tab until it closes.",
+    );
   } else if (sessionOn) {
-    setStatusBadge("on", "Active", "Watching this tab. Reload if you just enabled it.");
+    setStatusBadge(
+      "on",
+      "Active",
+      "Watching this tab. Reload if you just enabled it.",
+    );
   } else if (onList) {
-    setStatusBadge("on", "Active", "Watching this site. Reload if you just enabled it.");
+    setStatusBadge(
+      "on",
+      "Active",
+      "Watching this site. Reload if you just enabled it.",
+    );
   } else {
-    setStatusBadge("off", "Off", "Not in protected list. Use Force On, or add it in Sites.");
+    setStatusBadge(
+      "off",
+      "Off",
+      "Not in protected list. Use Force On, or add it in Sites.",
+    );
   }
 
   const override = sync.siteOverrides?.[currentHost];
@@ -819,15 +949,20 @@ async function loadTabContext() {
     headerStatusEl.classList.add("hidden");
   };
 
-  if (!tab?.id || !tab.url) { hideTabUi(); return; }
+  if (!tab?.id || !tab.url) {
+    hideTabUi();
+    return;
+  }
 
-  
   try {
     const { hostname } = new URL(tab.url);
-    if (!hostname || hostname.startsWith("chrome")) { hideTabUi(); return; }
+    if (!hostname || hostname.startsWith("chrome")) {
+      hideTabUi();
+      return;
+    }
 
     currentTabId = tab.id;
-    currentHost  = normalizeHost(hostname);
+    currentHost = normalizeHost(hostname);
 
     siteSectionEl.classList.remove("hidden");
     quickActionsEl.classList.remove("hidden");
@@ -846,18 +981,16 @@ async function loadTabContext() {
     return;
   }
 
-  
   try {
     await renderDiscover();
   } catch (err) {
     console.warn("[privacy-guard] renderDiscover error (non-fatal):", err);
   }
 
-  
   try {
     const { exceptions = [] } = await sendBg({ type: "getExceptions" });
     updateExceptionsBadge(countRelevantExceptions(exceptions));
-  } catch {  }
+  } catch {}
 }
 
 async function load() {
@@ -884,7 +1017,10 @@ siteCustomEl.addEventListener("change", async () => {
   const sync = await readSync();
   const so = { ...sync.siteOverrides };
   if (siteCustomEl.checked) {
-    so[currentHost] = { useCustom: true, features: { ...DEFAULT_FEATURES, ...sync.features } };
+    so[currentHost] = {
+      useCustom: true,
+      features: { ...DEFAULT_FEATURES, ...sync.features },
+    };
     editingSiteCustom = true;
   } else {
     delete so[currentHost];
@@ -895,13 +1031,15 @@ siteCustomEl.addEventListener("change", async () => {
 });
 
 sessionBtns.default.addEventListener("click", () => setTabSession("default"));
-sessionBtns.active.addEventListener("click",  () => setTabSession("active"));
-sessionBtns.paused.addEventListener("click",  () => setTabSession("paused"));
+sessionBtns.active.addEventListener("click", () => setTabSession("active"));
+sessionBtns.paused.addEventListener("click", () => setTabSession("paused"));
 
 document.getElementById("snooze-apply").addEventListener("click", async () => {
   const mins = Number(snoozeHoursEl.value) * 60 + Number(snoozeMinEl.value);
   if (mins <= 0) return;
-  await chrome.storage.session.set({ snoozeUntil: Date.now() + Math.min(mins, 1440) * 60000 });
+  await chrome.storage.session.set({
+    snoozeUntil: Date.now() + Math.min(mins, 1440) * 60000,
+  });
   await renderSnoozeStatus();
   await refreshSiteStatus();
   refreshBadge();
@@ -923,15 +1061,22 @@ document.getElementById("scan-tab").addEventListener("click", async () => {
       files: ["observe.js"],
       world: "MAIN",
     });
-    await new Promise(resolve => setTimeout(resolve, 250));
-    const ready = await sendBg({ type: "getObserveReady", tabId: currentTabId });
-    const { items = [] } = await sendBg({ type: "getDiscovered", tabId: currentTabId });
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    const ready = await sendBg({
+      type: "getObserveReady",
+      tabId: currentTabId,
+    });
+    const { items = [] } = await sendBg({
+      type: "getDiscovered",
+      tabId: currentTabId,
+    });
     if (ready?.at >= startedAt) {
       discoverStatEl.textContent = "Watching — event bridge is active.";
     } else if (items.length) {
       discoverStatEl.textContent = "Watching — observed URLs captured.";
     } else {
-      discoverStatEl.textContent = "Watcher injected — interact with the page or reload it.";
+      discoverStatEl.textContent =
+        "Watcher injected — interact with the page or reload it.";
     }
     discoverStatEl.className = "scan-msg ok";
   } catch (err) {
@@ -946,7 +1091,8 @@ document.getElementById("reload-tab").addEventListener("click", async () => {
   if (currentTabId == null) return;
   try {
     await chrome.tabs.reload(currentTabId);
-    discoverStatEl.textContent = "Reloading — reopen Privacy Guard after the page loads.";
+    discoverStatEl.textContent =
+      "Reloading — reopen Privacy Guard after the page loads.";
     discoverStatEl.className = "scan-msg ok";
   } catch (err) {
     console.error(err);
@@ -955,36 +1101,45 @@ document.getElementById("reload-tab").addEventListener("click", async () => {
   }
 });
 
-document.getElementById("block-selected").addEventListener("click", async () => {
-  const sync = await readSync();
-  const patterns = new Set(sync.customPatterns ?? []);
-  let added = 0;
+document
+  .getElementById("block-selected")
+  .addEventListener("click", async () => {
+    const sync = await readSync();
+    const patterns = new Set(sync.customPatterns ?? []);
+    let added = 0;
 
-  discoverListEl.querySelectorAll("input[type=\"checkbox\"]:checked").forEach(cb => {
-    const p = cb.dataset.pattern;
-    if (p && !patterns.has(p)) { patterns.add(p); added++; }
+    discoverListEl
+      .querySelectorAll('input[type="checkbox"]:checked')
+      .forEach((cb) => {
+        const p = cb.dataset.pattern;
+        if (p && !patterns.has(p)) {
+          patterns.add(p);
+          added++;
+        }
+      });
+
+    if (!added) {
+      discoverStatEl.textContent = "No unblocked items selected.";
+      discoverStatEl.className = "scan-msg err";
+      return;
+    }
+
+    const next = [...patterns].sort();
+    await chrome.storage.sync.set({ customPatterns: next });
+    discoverStatEl.textContent = `${added} pattern${added !== 1 ? "s" : ""} added — reload tab to apply.`;
+    discoverStatEl.className = "scan-msg ok";
+    showReloadNotice();
+    await renderDiscover();
   });
 
-  if (!added) {
-    discoverStatEl.textContent = "No unblocked items selected.";
-    discoverStatEl.className = "scan-msg err";
-    return;
-  }
-
-  const next = [...patterns].sort();
-  await chrome.storage.sync.set({ customPatterns: next });
-  discoverStatEl.textContent = `${added} pattern${added !== 1 ? "s" : ""} added — reload tab to apply.`;
-  discoverStatEl.className = "scan-msg ok";
-  showReloadNotice();
-  await renderDiscover();
-});
-
-document.getElementById("clear-discover").addEventListener("click", async () => {
-  if (currentTabId == null) return;
-  await sendBg({ type: "clearDiscovered", tabId: currentTabId });
-  discoverStatEl.className = "scan-msg";
-  await renderDiscover();
-});
+document
+  .getElementById("clear-discover")
+  .addEventListener("click", async () => {
+    if (currentTabId == null) return;
+    await sendBg({ type: "clearDiscovered", tabId: currentTabId });
+    discoverStatEl.className = "scan-msg";
+    await renderDiscover();
+  });
 
 document.getElementById("clear-log").addEventListener("click", async () => {
   if (currentTabId == null) return;
@@ -995,9 +1150,15 @@ document.getElementById("clear-log").addEventListener("click", async () => {
   refreshBadge();
 });
 
-document.getElementById("add-domain").addEventListener("click", () => addDomain(inputEl.value));
-inputEl.addEventListener("keydown", e => { if (e.key === "Enter") addDomain(inputEl.value); });
-document.getElementById("add-current").addEventListener("click", () => addDomain(currentHost ?? inputEl.value));
+document
+  .getElementById("add-domain")
+  .addEventListener("click", () => addDomain(inputEl.value));
+inputEl.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") addDomain(inputEl.value);
+});
+document
+  .getElementById("add-current")
+  .addEventListener("click", () => addDomain(currentHost ?? inputEl.value));
 
 document.getElementById("qa-add-site").addEventListener("click", () => {
   addDomain(currentHost ?? "");
