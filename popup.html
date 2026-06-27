@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Privacy Guard</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
+
+    :root {
+      --bg: #f0f2f5;
+      --surface: #ffffff;
+      --surface2: #e8ebf0;
+      --surface3: #f7f8fa;
+      --border: #dde1e8;
+      --border-light: #eceef2;
+      --text: #111827;
+      --muted: #6b7280;
+      --faint: #9ca3af;
+      --tiny: #b0b7c3;
+      --accent: #2563eb;
+      --accent-light: #eff6ff;
+      --accent-border: #bfdbfe;
+      --green: #16a34a;
+      --green-bg: #f0fdf4;
+      --green-border: #bbf7d0;
+      --yellow: #b45309;
+      --yellow-bg: #fffbeb;
+      --yellow-border: #fde68a;
+      --red: #dc2626;
+      --red-bg: #fef2f2;
+      --red-border: #fecaca;
+      --mono: 'DM Mono', ui-monospace, monospace;
+      --font: 'DM Sans', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+      --radius: 10px;
+      --radius-sm: 6px;
+      --nav-w: 200px;
+      --header-h: 52px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      width: 360px;
+      height: 560px;
+      background: var(--bg);
+      font-family: var(--font);
+      font-size: 13px;
+      color: var(--text);
+      line-height: 1.45;
+      overflow: hidden;
+      position: relative;
+    }
+
+    
+    .header {
+      height: var(--header-h);
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 14px;
+      position: relative;
+      z-index: 100;
+      flex-shrink: 0;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .menu-btn {
+      width: 32px; height: 32px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      border-radius: var(--radius-sm);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 0;
+      transition: background .12s;
+      flex-shrink: 0;
+      position: relative;
+    }
+    .menu-btn:hover { background: var(--surface2); }
+    .menu-btn.has-observed::after {
+      content: "";
+      position: absolute;
+      top: 4px; right: 4px;
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 2px var(--surface);
+    }
+    .menu-btn span {
+      display: block;
+      width: 16px; height: 1.5px;
+      background: var(--muted);
+      border-radius: 2px;
+      transition: all .2s;
+    }
+    .menu-btn.open span:nth-child(1) { transform: translateY(5.5px) rotate(45deg); }
+    .menu-btn.open span:nth-child(2) { opacity: 0; transform: scaleX(0); }
+    .menu-btn.open span:nth-child(3) { transform: translateY(-5.5px) rotate(-45deg); }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+      color: var(--text);
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .header-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 9px;
+      border-radius: 20px;
+      border: 1px solid transparent;
+      transition: all .15s;
+    }
+    .hs-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .header-status.on     { background: var(--green-bg);  border-color: var(--green-border);  color: var(--green); }
+    .header-status.off    { background: var(--red-bg);    border-color: var(--red-border);    color: var(--red); }
+    .header-status.paused { background: var(--yellow-bg); border-color: var(--yellow-border); color: var(--yellow); }
+    .header-status.on     .hs-dot { background: var(--green); }
+    .header-status.off    .hs-dot { background: var(--red); }
+    .header-status.paused .hs-dot { background: #f59e0b; }
+
+    .ext-toggle { display: flex; align-items: center; gap: 0; cursor: pointer; user-select: none; }
+    .ext-toggle input { display: none; }
+    .ext-toggle .pill {
+      width: 34px; height: 20px;
+      background: var(--border);
+      border-radius: 10px;
+      position: relative;
+      transition: background .18s;
+      flex-shrink: 0;
+    }
+    .ext-toggle .pill::after {
+      content: ""; position: absolute;
+      top: 2px; left: 2px;
+      width: 16px; height: 16px;
+      border-radius: 50%;
+      background: white;
+      box-shadow: 0 1px 3px rgba(0,0,0,.22);
+      transition: transform .18s;
+    }
+    .ext-toggle input:checked ~ .pill { background: var(--accent); }
+    .ext-toggle input:checked ~ .pill::after { transform: translateX(14px); }
+
+    
+    .layout {
+      display: flex;
+      height: calc(560px - var(--header-h));
+      position: relative;
+      overflow: hidden;
+    }
+
+    .drawer-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0);
+      z-index: 50;
+      pointer-events: none;
+      transition: background .2s;
+    }
+    .drawer-overlay.open {
+      background: rgba(0,0,0,0.18);
+      pointer-events: all;
+    }
+
+    .nav-drawer {
+      position: absolute;
+      top: 0; left: 0;
+      width: var(--nav-w);
+      height: 100%;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      z-index: 60;
+      transform: translateX(-100%);
+      transition: transform .22s cubic-bezier(0.32, 0.72, 0, 1);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .nav-drawer.open { transform: translateX(0); }
+
+    .nav-section-label {
+      font-size: 9.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--faint);
+      padding: 14px 14px 6px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 9px 14px;
+      cursor: pointer;
+      border-radius: 0;
+      user-select: none;
+      transition: background .1s;
+      border: none;
+      background: none;
+      width: 100%;
+      text-align: left;
+      color: var(--muted);
+      font-family: var(--font);
+      font-size: 12.5px;
+      font-weight: 500;
+      position: relative;
+    }
+    .nav-item:hover { background: var(--surface3); color: var(--text); }
+    .nav-item.active {
+      color: var(--accent);
+      background: var(--accent-light);
+      font-weight: 600;
+    }
+    .nav-item.active::before {
+      content: '';
+      position: absolute;
+      left: 0; top: 4px; bottom: 4px;
+      width: 3px;
+      background: var(--accent);
+      border-radius: 0 3px 3px 0;
+    }
+
+    .nav-icon {
+      width: 18px; height: 18px;
+      flex-shrink: 0;
+      opacity: 0.7;
+    }
+    .nav-item.active .nav-icon { opacity: 1; }
+
+    .nav-badge {
+      margin-left: auto;
+      font-size: 10px;
+      font-weight: 700;
+      background: var(--red);
+      color: white;
+      border-radius: 10px;
+      padding: 1px 5px;
+      min-width: 18px;
+      text-align: center;
+      display: none;
+    }
+    .nav-badge.show     { display: block; }
+    .nav-badge.observed { background: var(--accent); }
+    .nav-badge.green    { background: var(--green); }
+
+    .nav-divider {
+      height: 1px;
+      background: var(--border-light);
+      margin: 6px 10px;
+    }
+
+    
+    .main {
+      flex: 1;
+      overflow-y: auto;
+      padding: 12px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    ::-webkit-scrollbar { width: 3px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+    .panel { display: none; flex-direction: column; gap: 8px; }
+    .panel.active { display: flex; }
+
+    
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .card-header {
+      padding: 10px 13px;
+      border-bottom: 1px solid var(--border-light);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .card-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--muted);
+    }
+    .card-body { padding: 11px 13px; }
+    .card-body + .card-body { border-top: 1px solid var(--border-light); padding-top: 10px; }
+
+    
+    .site-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 5px;
+    }
+    .site-domain { font-size: 14px; font-weight: 700; color: var(--text); letter-spacing: -0.02em; }
+    .site-domain.empty { font-size: 12px; font-weight: 400; color: var(--faint); font-style: italic; }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 3px 9px;
+      border-radius: 20px;
+      border: 1px solid transparent;
+    }
+    .badge-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+    .badge.on     { background: var(--green-bg);  border-color: var(--green-border);  color: var(--green); }
+    .badge.off    { background: var(--red-bg);    border-color: var(--red-border);    color: var(--red); }
+    .badge.paused { background: var(--yellow-bg); border-color: var(--yellow-border); color: var(--yellow); }
+    .badge.on     .badge-dot { background: var(--green); }
+    .badge.off    .badge-dot { background: var(--red); }
+    .badge.paused .badge-dot { background: #f59e0b; }
+
+    .status-sub { font-size: 11px; color: var(--muted); margin-bottom: 10px; min-height: 15px; }
+
+    .seg {
+      display: flex;
+      background: var(--surface2);
+      border-radius: 7px;
+      padding: 3px;
+      gap: 2px;
+      margin-bottom: 8px;
+    }
+    .seg button {
+      flex: 1;
+      background: transparent;
+      border: none;
+      border-radius: 5px;
+      padding: 5px 3px;
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--muted);
+      cursor: pointer;
+      font-family: var(--font);
+      line-height: 1.25;
+      transition: all .14s;
+      white-space: nowrap;
+    }
+    .seg button .seg-title { display: block; font-weight: 600; color: var(--text); font-size: 11px; }
+    .seg button .seg-sub   { display: block; font-size: 9.5px; color: var(--tiny); margin-top: 1px; }
+    .seg button.active { background: white; box-shadow: 0 1px 3px rgba(0,0,0,.13); }
+    .seg button.active .seg-title { color: var(--accent); }
+    .seg button.active .seg-sub   { color: var(--accent); opacity: .7; }
+
+    .seg-footer { font-size: 10px; color: var(--tiny); margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--border-light); }
+
+    .custom-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11.5px;
+      color: var(--muted);
+      margin-top: 8px;
+      cursor: pointer;
+    }
+    .custom-row input { accent-color: var(--accent); }
+
+    .quick-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+    .qa-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 3px;
+      padding: 10px 11px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      cursor: pointer;
+      text-align: left;
+      transition: all .13s;
+      font-family: var(--font);
+    }
+    .qa-btn:hover { background: var(--surface3); border-color: var(--border); }
+    .qa-btn.primary { border-color: var(--accent-border); background: var(--accent-light); }
+    .qa-btn.primary:hover { background: #dbeafe; }
+    .qa-btn-title { font-size: 11.5px; font-weight: 600; color: var(--text); line-height: 1.2; }
+    .qa-btn.primary .qa-btn-title { color: var(--accent); }
+    .qa-btn-sub { font-size: 10px; color: var(--faint); line-height: 1.3; }
+
+    
+    .block-row {
+      display: flex;
+      align-items: baseline;
+      gap: 6px;
+      margin-bottom: 3px;
+    }
+    .block-big   { font-size: 26px; font-weight: 700; color: var(--text); line-height: 1; letter-spacing: -0.04em; }
+    .block-label { font-size: 11px; color: var(--muted); }
+
+    .block-log {
+      list-style: none;
+      max-height: 110px;
+      overflow-y: auto;
+      margin: 6px 0;
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-sm);
+      background: var(--surface3);
+    }
+    .block-log li {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      padding: 4px 7px;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .block-log li:last-child { border-bottom: none; }
+    .block-log .t       { color: var(--tiny); flex-shrink: 0; }
+    .block-log .log-url { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .block-log li.excepted .log-url { text-decoration: line-through; opacity: .55; }
+
+    
+    .log-allow-btn {
+      flex-shrink: 0;
+      padding: 1px 6px;
+      font-size: 9.5px;
+      font-family: var(--font);
+      font-weight: 500;
+      border-radius: 3px;
+      border: 1px solid var(--green-border);
+      background: var(--green-bg);
+      color: var(--green);
+      cursor: pointer;
+    }
+    .log-allow-btn:hover    { background: #bbf7d0; }
+    .log-allow-btn:disabled { opacity: .6; cursor: default; }
+
+    
+    .feat-note { font-size: 10.5px; color: var(--faint); font-style: italic; margin-bottom: 9px; line-height: 1.4; }
+    .feat-list { display: flex; flex-direction: column; }
+    .feat-list.disabled { opacity: .45; pointer-events: none; }
+    .feat-item { padding: 9px 0; border-bottom: 1px solid var(--border-light); }
+    .feat-item:last-child { border-bottom: none; }
+    .feat-top { display: flex; align-items: flex-start; gap: 7px; margin-bottom: 3px; }
+    .feat-top input[type="checkbox"] { margin-top: 2px; flex-shrink: 0; accent-color: var(--accent); }
+    .feat-name { font-size: 12px; font-weight: 600; color: var(--text); cursor: pointer; }
+    .feat-hint { font-size: 10.5px; color: var(--muted); margin: 2px 0 5px 19px; line-height: 1.35; }
+    .event-tags { display: flex; flex-wrap: wrap; gap: 3px; padding-left: 19px; }
+    .event-tag {
+      font-family: var(--mono);
+      font-size: 9.5px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 1px 5px;
+      border-radius: 3px;
+    }
+
+    
+    .feat-child {
+      margin-left: 18px;
+      padding: 6px 0 6px 10px;
+      border-left: 2px solid var(--border);
+      border-bottom: 1px solid var(--border-light);
+      background: none;
+    }
+    .feat-child:last-child { border-bottom: none; }
+    .feat-child .feat-hint { margin-left: 0; }
+    .feat-child .event-tags { padding-left: 0; }
+    .feat-child .feat-name { font-weight: 500; color: var(--muted); }
+    .feat-child-off { opacity: 0.38; pointer-events: none; }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      padding: 4px 0 8px;
+      display: flex;
+      align-items: center;
+      gap: 7px;
+    }
+    .section-label::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border-light);
+    }
+
+    
+    .site-list { list-style: none; max-height: 130px; overflow-y: auto; margin: 7px 0; }
+    .site-list li {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 6px 0; border-bottom: 1px solid var(--border-light); font-size: 12px;
+    }
+    .site-list li:last-child { border-bottom: none; }
+    .s-domain { color: var(--text); font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+    .rm-btn {
+      background: none; border: none; color: var(--tiny);
+      font-size: 15px; cursor: pointer; padding: 0 3px;
+      border-radius: 3px; line-height: 1; flex-shrink: 0;
+    }
+    .rm-btn:hover { color: var(--red); background: var(--red-bg); }
+
+    
+    .scan-msg { font-size: 11px; font-weight: 600; margin: 6px 0; display: none; }
+    .scan-msg.ok  { display: block; color: var(--green); }
+    .scan-msg.err { display: block; color: var(--red); }
+
+    .disc-list {
+      list-style: none;
+      max-height: 240px;
+      overflow-y: auto;
+      margin: 8px 0;
+    }
+
+    
+    .disc-entry {
+      padding: 6px 0;
+      border-bottom: 1px solid var(--border-light);
+    }
+    .disc-entry:last-child { border-bottom: none; }
+
+    
+    .disc-entry.is-blocked  { border-left: 2px solid var(--red);   padding-left: 6px; }
+    
+    .disc-entry.is-excepted { border-left: 2px solid #f59e0b; padding-left: 6px; }
+
+    .disc-body { display: flex; flex-direction: column; gap: 2px; }
+
+    
+    .disc-urlrow {
+      display: flex;
+      align-items: flex-start;
+      gap: 5px;
+    }
+    .disc-decision {
+      flex-shrink: 0;
+      font-size: 8.5px;
+      font-weight: 700;
+      padding: 1px 4px;
+      border-radius: 3px;
+      letter-spacing: .04em;
+      margin-top: 1px;
+      white-space: nowrap;
+    }
+    .dec-block  { background: var(--red-bg);    color: var(--red);    border: 1px solid var(--red-border); }
+    .dec-allow  { background: var(--green-bg);  color: var(--green);  border: 1px solid var(--green-border); }
+    .dec-except { background: var(--yellow-bg); color: var(--yellow); border: 1px solid var(--yellow-border); }
+
+    .disc-url-text {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      font-weight: 500;
+      color: var(--text);
+      word-break: break-all;
+      flex: 1;
+      min-width: 0;
+    }
+
+    
+    .disc-tags { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 2px; }
+    .disc-blocked-tag {
+      font-size: 9.5px; font-weight: 700;
+      color: var(--red);
+      background: var(--red-bg);
+      border: 1px solid var(--red-border);
+      border-radius: 3px; padding: 0 4px;
+    }
+
+    
+    .disc-meta { font-size: 10px; color: var(--tiny); }
+
+    
+    .disc-action-btn {
+      align-self: flex-start;
+      margin-top: 4px;
+      padding: 2px 8px;
+      font-size: 10px;
+      font-family: var(--font);
+      font-weight: 500;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .disc-action-btn:disabled { opacity: .6; cursor: default; }
+    .disc-allow-btn   { background: var(--green-bg);  color: var(--green);  border: 1px solid var(--green-border); }
+    .disc-allow-btn:not(:disabled):hover { background: #bbf7d0; }
+    .disc-reblock-btn { background: var(--red-bg);    color: var(--red);    border: 1px solid var(--red-border); }
+    .disc-reblock-btn:not(:disabled):hover { background: #fee2e2; }
+
+    
+    .disc-check-row {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 4px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .disc-check-row input { accent-color: var(--accent); }
+
+    
+    .exc-pattern {
+      font-family: var(--mono);
+      font-size: 10.5px;
+      max-width: 220px;
+    }
+
+    
+    .reload-notice {
+      background: var(--yellow-bg);
+      color: var(--yellow);
+      border: 1px solid var(--yellow-border);
+      border-radius: var(--radius-sm);
+      font-size: 11px;
+      font-weight: 500;
+      padding: 7px 11px;
+      cursor: pointer;
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .reload-notice:hover { background: #fef3c7; }
+
+    
+    .snooze-alert { font-size: 11px; font-weight: 600; color: var(--yellow); margin-bottom: 7px; display: none; }
+    .snooze-alert.visible { display: block; }
+
+    .snooze-row { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+    .snooze-row label { display: flex; align-items: center; gap: 4px; font-size: 12px; color: var(--muted); }
+    .snooze-row select {
+      border: 1px solid var(--border);
+      border-radius: 5px;
+      background: var(--surface);
+      font-size: 12px;
+      font-family: var(--font);
+      color: var(--text);
+      padding: 4px 6px;
+    }
+
+    
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      padding: 6px 11px;
+      border-radius: var(--radius-sm);
+      font-size: 12px;
+      font-weight: 500;
+      font-family: var(--font);
+      cursor: pointer;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      transition: background .12s;
+      white-space: nowrap;
+    }
+    .btn:hover { background: var(--surface2); }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: white; }
+    .btn.primary:hover { background: #1d4ed8; border-color: #1d4ed8; }
+    .btn.danger  { background: var(--red-bg); border-color: var(--red-border); color: var(--red); }
+    .btn.danger:hover { background: #fee2e2; }
+    .btn.full { width: 100%; margin-bottom: 6px; }
+
+    .btn-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+
+    .input-row { display: flex; gap: 6px; margin-bottom: 6px; }
+    .input-row input[type="text"],
+    input[type="text"].full-input {
+      flex: 1; padding: 7px 9px;
+      border: 1px solid var(--border); border-radius: var(--radius-sm);
+      font-size: 12px; font-family: var(--font); color: var(--text); background: var(--surface);
+      width: 100%;
+    }
+    .input-row input[type="text"]:focus,
+    input[type="text"].full-input:focus { outline: none; border-color: var(--accent); }
+
+    .note { font-size: 11px; color: var(--muted); line-height: 1.45; }
+    .note-box {
+      font-size: 10.5px;
+      color: var(--muted);
+      line-height: 1.45;
+      background: var(--surface3);
+      border: 1px solid var(--border-light);
+      border-radius: var(--radius-sm);
+      padding: 8px 10px;
+      margin-bottom: 8px;
+    }
+    .empty-note { font-size: 11.5px; color: var(--tiny); font-style: italic; padding: 4px 0; }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-left">
+    <button class="menu-btn" id="menu-btn" aria-label="Open menu">
+      <span></span><span></span><span></span>
+    </button>
+    <div class="brand">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <rect width="20" height="20" rx="5" fill="#1e2d45"/>
+        <path d="M10 2.5L4 5.5V10C4 13.3 6.7 16.4 10 17.2C13.3 16.4 16 13.3 16 10V5.5L10 2.5Z" fill="#f5c000" opacity=".9"/>
+        <path d="M8 10l1.4 1.4L12.5 8" stroke="#1e2d45" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Privacy Guard
+    </div>
+  </div>
+
+  <div class="header-right">
+    <span id="header-status" class="header-status off hidden">
+      <span class="hs-dot"></span>
+      <span id="header-status-label">Off</span>
+    </span>
+    <label class="ext-toggle" title="Enable / disable extension globally">
+      <input type="checkbox" id="enabled">
+      <div class="pill"></div>
+    </label>
+  </div>
+</div>
+
+<div class="layout">
+
+  <div class="drawer-overlay" id="drawer-overlay"></div>
+
+  
+  <nav class="nav-drawer" id="nav-drawer">
+
+    <div class="nav-section-label">Current Tab</div>
+
+    <button class="nav-item active" data-panel="home" id="nav-home">
+      <svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6">
+        <path d="M2 9l7-6 7 6v7a1 1 0 01-1 1H3a1 1 0 01-1-1V9z"/>
+        <rect x="6.5" y="12" width="5" height="4" rx=".5"/>
+      </svg>
+      <span>Home</span>
+      <span class="nav-badge" id="nav-block-badge"></span>
+    </button>
+
+    <button class="nav-item" data-panel="discover" id="nav-discover">
+      <svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6">
+        <circle cx="9" cy="9" r="7"/>
+        <path d="M11.5 6.5l-4 2-2 4 4-2 2-4z"/>
+        <circle cx="9" cy="9" r="1.2" fill="currentColor" stroke="none"/>
+      </svg>
+      <span>Observed URLs</span>
+      <span class="nav-badge observed" id="nav-discover-badge"></span>
+    </button>
+
+    <button class="nav-item" data-panel="exceptions" id="nav-exceptions">
+      <svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6">
+        <path d="M9 2l2 5h5l-4 3 1.5 5L9 12l-4.5 3L6 10 2 7h5z" stroke-linejoin="round"/>
+      </svg>
+      <span>Exceptions</span>
+      <span class="nav-badge green" id="nav-exceptions-badge"></span>
+    </button>
+
+    <div class="nav-divider"></div>
+    <div class="nav-section-label">Settings</div>
+
+    <button class="nav-item" data-panel="blocking">
+      <svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6">
+        <circle cx="9" cy="9" r="7"/>
+        <path d="M4.5 4.5l9 9" stroke-linecap="round"/>
+      </svg>
+      <span>Blocking</span>
+    </button>
+
+    <button class="nav-item" data-panel="spoofing">
+      <svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6">
+        <path d="M2 9c2-4 4-5.5 7-5.5S14 5 16 9c-2 4-4 5.5-7 5.5S4 13 2 9z"/>
+        <circle cx="9" cy="9" r="2.5"/>
+        <path d="M3 3l12 12" stroke-linecap="round"/>
+      </svg>
+      <span>Behavioral</span>
+    </button>
+
+    <button class="nav-item" data-panel="sites">
+      <svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6">
+        <circle cx="9" cy="9" r="7"/>
+        <path d="M9 2c-2 3-2 11 0 14M2 9c3-2 11-2 14 0" stroke-linecap="round"/>
+      </svg>
+      <span>Protected Sites</span>
+    </button>
+
+    <button class="nav-item" data-panel="snooze">
+      <svg class="nav-icon" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.6">
+        <circle cx="9" cy="9" r="7"/>
+        <path d="M9 5v4l3 2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <span>Pause Everywhere</span>
+    </button>
+
+  </nav>
+
+  
+  <div class="main">
+
+    
+    <div id="reload-notice" class="reload-notice hidden">
+      ⟳ Exceptions changed — click here to reload tab now
+    </div>
+
+    
+    <div id="panel-home" class="panel active">
+
+      <div id="current-site" class="card hidden">
+        <div class="card-header">
+          <span class="card-title" id="site-title-label">This Tab</span>
+          <span id="status-badge" class="badge off">
+            <span class="badge-dot"></span>
+            <span id="status-label">Off</span>
+          </span>
+        </div>
+        <div class="card-body">
+          <p id="site-status" class="status-sub"></p>
+
+          <div class="seg">
+            <button id="session-default" class="active">
+              <span class="seg-title">Saved Rules</span>
+              <span class="seg-sub">Follows list</span>
+            </button>
+            <button id="session-active">
+              <span class="seg-title">Force On</span>
+              <span class="seg-sub">Tab only</span>
+            </button>
+            <button id="session-paused">
+              <span class="seg-title">Force Off</span>
+              <span class="seg-sub">Tab only</span>
+            </button>
+          </div>
+          <p class="seg-footer">⏱ Tab-only modes clear when the tab closes.</p>
+
+          <div class="custom-row">
+            <input type="checkbox" id="site-use-custom">
+            <label for="site-use-custom">Custom protection for this site</label>
+          </div>
+        </div>
+      </div>
+
+      <div id="quick-actions" class="hidden">
+        <div class="quick-actions">
+          <button class="qa-btn primary" id="qa-add-site">
+            <span class="qa-btn-title">+ Protect Site</span>
+            <span class="qa-btn-sub">Add to protected list</span>
+          </button>
+          <button class="qa-btn" id="qa-discover">
+            <span class="qa-btn-title">🔍 Scan URLs</span>
+            <span class="qa-btn-sub">Observe telemetry</span>
+          </button>
+        </div>
+      </div>
+
+      
+      <div id="activity" class="card hidden">
+        <div class="card-header">
+          <span class="card-title">Blocked This Tab</span>
+          <button class="btn" id="clear-log" style="padding:2px 8px;font-size:10.5px;">Clear</button>
+        </div>
+        <div class="card-body">
+          <div class="block-row">
+            <span class="block-big" id="block-big">0</span>
+            <span class="block-label" id="block-sub">requests blocked</span>
+          </div>
+          <ul id="block-log" class="block-log"></ul>
+        </div>
+      </div>
+
+      <div id="no-tab-msg" class="card hidden">
+        <div class="card-body">
+          <p class="note">Open a website to see tab-specific controls here.</p>
+        </div>
+      </div>
+
+    </div>
+
+    
+    <div id="panel-blocking" class="panel">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Network Blocking</span>
+        </div>
+        <div class="card-body">
+          <p class="feat-note">Intercepts outgoing requests to known tracking endpoints.</p>
+          <div id="features-list-blocking" class="feat-list"></div>
+        </div>
+      </div>
+    </div>
+
+    
+    <div id="panel-spoofing" class="panel">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title" id="features-hint">Behavioral Spoofing</span>
+        </div>
+        <div class="card-body">
+          <p class="feat-note">Masks browser signals commonly used by analytics and tracking scripts.</p>
+          <div id="features-list-spoofing" class="feat-list"></div>
+        </div>
+      </div>
+    </div>
+
+    
+    <div id="panel-sites" class="panel">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Protected Sites</span>
+        </div>
+        <div class="card-body">
+          <p class="note-box">Privacy Guard activates on these sites under "Saved Rules". Adding a site here <em>activates</em> protection — it does not exempt it.</p>
+          <div class="input-row">
+            <input type="text" id="domain-input" placeholder="example.com" spellcheck="false">
+            <button class="btn primary" id="add-domain">Add</button>
+          </div>
+          <button class="btn full" id="add-current">+ Add This Tab's Site</button>
+          <ul id="allowlist" class="site-list"></ul>
+        </div>
+      </div>
+    </div>
+
+    
+    <div id="panel-discover" class="panel">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Observed Telemetry URLs</span>
+        </div>
+        <div class="card-body">
+          <p class="note-box">Each row is one full URL. <strong>BLOCKED</strong> = already blocked by a rule. <strong>ALLOWED</strong> = not blocked — check the box and hit "Block Selected" to add a rule.</p>
+          <p id="discover-status" class="scan-msg"></p>
+          <div class="btn-row" style="margin-top:0; margin-bottom:6px;">
+            <button class="btn primary" id="scan-tab">Start Watching</button>
+            <button class="btn" id="reload-tab">Reload Tab</button>
+          </div>
+          <ul id="discover-list" class="disc-list"></ul>
+          <div class="btn-row">
+            <button class="btn primary" id="block-selected">Block Selected</button>
+            <button class="btn" id="clear-discover">Clear List</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    
+    <div id="panel-exceptions" class="panel">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">URL Exceptions</span>
+        </div>
+        <div class="card-body">
+          <p class="note-box">These URLs are allowed even when they match a blocking rule. Added via "Allow" in the block log or Observed URLs panel. Removing an entry re-enables blocking on reload.</p>
+          <ul id="exceptions-list" class="site-list"></ul>
+        </div>
+      </div>
+    </div>
+
+    
+    <div id="panel-snooze" class="panel">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Pause Everywhere</span>
+        </div>
+        <div class="card-body">
+          <p class="note" style="margin-bottom:10px;">Temporarily pause on all sites without changing your protected-site list. Expires automatically.</p>
+          <p id="snooze-status" class="snooze-alert"></p>
+          <div class="snooze-row">
+            <label><select id="snooze-hours"></select> hrs</label>
+            <label><select id="snooze-minutes"></select> min</label>
+          </div>
+          <div class="btn-row">
+            <button class="btn primary" id="snooze-apply">Snooze</button>
+            <button class="btn" id="snooze-clear">Clear Snooze</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="settings-meta.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>
