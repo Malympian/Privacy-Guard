@@ -1,52 +1,51 @@
 importScripts("icon-render.js");
 
 const DEFAULT_FEATURES = {
-  
-  blockTrackingRequests:  true,
-  blockTrackingPixels:    true,
-  blockKnownTrackers:     true,
-  blockWebRTC:            true,
-  blockBattery:           true,
-  
-  spoofCamera:            false,
-  blockCamera:            false,
-  spoofMicrophone:        false,
-  blockMicrophone:        false,
-  
-  spoofTabVisibility:     true,
-  spoofFocus:             true,
-  
-  blockTabEnumeration:    true,
-  
-  spoofReferrer:          true,
-  blockCacheTimingProbe:  true,
-  
-  spoofScreenSize:        true,
-  spoofScrollDepth:       true,
+  blockTrackingRequests: true,
+  blockTrackingPixels: true,
+  blockKnownTrackers: true,
+  blockWebRTC: true,
+  blockBattery: true,
+
+  spoofCamera: false,
+  blockCamera: false,
+  spoofMicrophone: false,
+  blockMicrophone: false,
+
+  spoofTabVisibility: true,
+  spoofFocus: true,
+
+  blockTabEnumeration: true,
+
+  spoofReferrer: true,
+  blockCacheTimingProbe: true,
+
+  spoofScreenSize: true,
+  spoofScrollDepth: true,
   spoofPerformanceTiming: true,
-  
-  spoofKeyboardTiming:    true,
-  blockKeyboardEvents:    false,   
-  
-  spoofMouseMovement:     true,
-  blockMouseEvents:       false,
-  
-  spoofClicks:            true,
-  blockClickEvents:       false,
-  
-  spoofTouch:             true,
-  blockTouchEvents:       false,
-  
-  spoofFormInput:         true,
-  blockFormEvents:        false,
-  
-  blockClipboard:         true,
-  blockSelection:         true,
-  
-  spoofScreenCapture:     true,
-  blockScreenCapture:     true,
-  
-  blockScrollTracking:    false,   
+
+  spoofKeyboardTiming: true,
+  blockKeyboardEvents: false,
+
+  spoofMouseMovement: true,
+  blockMouseEvents: false,
+
+  spoofClicks: true,
+  blockClickEvents: false,
+
+  spoofTouch: true,
+  blockTouchEvents: false,
+
+  spoofFormInput: true,
+  blockFormEvents: false,
+
+  blockClipboard: true,
+  blockSelection: true,
+
+  spoofScreenCapture: true,
+  blockScreenCapture: true,
+
+  blockScrollTracking: false,
 };
 
 const DEFAULT_BLOCKED_PATTERNS = [
@@ -116,7 +115,9 @@ function mergeFeatures(globalFeatures, siteEntry) {
 }
 
 function getBlockedPatterns(sync) {
-  const custom = (sync.customPatterns ?? []).map((p) => p.trim()).filter(Boolean);
+  const custom = (sync.customPatterns ?? [])
+    .map((p) => p.trim())
+    .filter(Boolean);
   return [...DEFAULT_BLOCKED_PATTERNS, ...custom];
 }
 
@@ -127,7 +128,7 @@ function getExceptions(sync) {
 function exceptionPatternFromUrl(rawUrl) {
   try {
     const u = new URL(rawUrl);
-    return u.origin + u.pathname; 
+    return u.origin + u.pathname;
   } catch {
     return rawUrl;
   }
@@ -140,10 +141,13 @@ async function getInjectDecision(hostname, tabId) {
     features: DEFAULT_FEATURES,
     siteOverrides: {},
     customPatterns: [],
-    exceptions: [],           
+    exceptions: [],
   });
 
-  const session = await chrome.storage.session.get({ tabSession: {}, snoozeUntil: 0 });
+  const session = await chrome.storage.session.get({
+    tabSession: {},
+    snoozeUntil: 0,
+  });
   const tabState = tabId != null ? session.tabSession?.[tabId] : null;
   const host = normalizeHost(hostname);
   const onAllowlist = hostAllowed(host, sync.allowlist ?? []);
@@ -164,7 +168,7 @@ async function getInjectDecision(hostname, tabId) {
   const sharedConfig = {
     features: mergeFeatures(sync.features, siteEntry),
     blockedPatterns: getBlockedPatterns(sync),
-    exceptions: getExceptions(sync),   
+    exceptions: getExceptions(sync),
   };
 
   if (tabState?.mode === "active") {
@@ -188,17 +192,19 @@ async function applyAppearance(target, { status, blockCount = 0, title }) {
         ...target,
         path: STATUS_ICONS[status] ?? FALLBACK_ICONS,
       });
-      console.warn("[privacy-guard] canvas icon failed, using PNG", status, err);
+      console.warn(
+        "[privacy-guard] canvas icon failed, using PNG",
+        status,
+        err,
+      );
     } catch {
-      return; 
+      return;
     }
   }
   try {
     await chrome.action.setBadgeText({ ...target, text: "" });
     if (title) await chrome.action.setTitle({ ...target, title });
-  } catch {
-    
-  }
+  } catch {}
 }
 
 async function computeTabAppearance(tabId, tab) {
@@ -228,7 +234,9 @@ async function computeTabAppearance(tabId, tab) {
   }
 
   if (decision.reason === "snoozed") {
-    const { snoozeUntil = 0 } = await chrome.storage.session.get({ snoozeUntil: 0 });
+    const { snoozeUntil = 0 } = await chrome.storage.session.get({
+      snoozeUntil: 0,
+    });
     const mins = Math.max(1, Math.ceil((snoozeUntil - Date.now()) / 60000));
     return {
       status: "paused",
@@ -268,7 +276,10 @@ async function computeTabAppearance(tabId, tab) {
 }
 
 async function syncToolbarToActiveTab() {
-  const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const [active] = await chrome.tabs.query({
+    active: true,
+    currentWindow: true,
+  });
   if (!active?.id) return;
   const appearance = await computeTabAppearance(active.id, active);
   await applyAppearance({}, appearance);
@@ -287,7 +298,10 @@ async function updateActionForTab(tabId) {
   const appearance = await computeTabAppearance(tabId, tab);
   await applyAppearance({ tabId }, appearance);
 
-  const [active] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const [active] = await chrome.tabs.query({
+    active: true,
+    currentWindow: true,
+  });
   if (active?.id === tabId) {
     await applyAppearance({}, appearance);
   }
@@ -304,19 +318,17 @@ async function recordBlock(tabId, url) {
 
   const { tabStats = {} } = await chrome.storage.session.get({ tabStats: {} });
   const prev = tabStats[tabId] ?? { count: 0, log: [], grouped: {} };
-  const now  = Date.now();
+  const now = Date.now();
 
-  
   const entry = { url, at: now };
-  const log   = [entry, ...prev.log].slice(0, MAX_LOG);
+  const log = [entry, ...prev.log].slice(0, MAX_LOG);
 
-  
   const grouped = { ...(prev.grouped ?? {}) };
   const g = grouped[url];
   grouped[url] = {
     url,
-    hits:      (g?.hits ?? 0) + 1,
-    lastSeen:  now,
+    hits: (g?.hits ?? 0) + 1,
+    lastSeen: now,
     firstSeen: g?.firstSeen ?? now,
   };
 
@@ -328,38 +340,42 @@ async function recordBlock(tabId, url) {
 async function recordObserve(tabId, detail) {
   if (tabId == null || !detail?.url) return;
 
-  const sync = await chrome.storage.sync.get({ customPatterns: [], exceptions: [] });
+  const sync = await chrome.storage.sync.get({
+    customPatterns: [],
+    exceptions: [],
+  });
   const allPatterns = getBlockedPatterns(sync);
-  const exceptions  = getExceptions(sync);
+  const exceptions = getExceptions(sync);
 
-  const { tabDiscovered = {} } = await chrome.storage.session.get({ tabDiscovered: {} });
+  const { tabDiscovered = {} } = await chrome.storage.session.get({
+    tabDiscovered: {},
+  });
   const map = { ...(tabDiscovered[tabId] ?? {}) };
 
-  const url  = detail.url;
+  const url = detail.url;
   const prev = map[url] ?? null;
 
-  
   const matchedPatterns = allPatterns.filter((p) => url.includes(p));
 
-  
   const exceptionPattern = exceptionPatternFromUrl(url);
-  const isExcepted = exceptions.some((e) => url.includes(e) || exceptionPattern === e);
+  const isExcepted = exceptions.some(
+    (e) => url.includes(e) || exceptionPattern === e,
+  );
 
-  
   const blocked =
     !isExcepted && (matchedPatterns.length > 0 || !!detail.blocked);
 
   map[url] = {
     url,
-    hits:            (prev?.hits ?? 0) + 1,
-    via:             detail.via ?? prev?.via ?? "",
+    hits: (prev?.hits ?? 0) + 1,
+    via: detail.via ?? prev?.via ?? "",
     matchedPatterns,
-    decision:        blocked ? "block" : "allow",
-    reason:          matchedPatterns[0] ?? (detail.blocked ? "guard-blocked" : null),
+    decision: blocked ? "block" : "allow",
+    reason: matchedPatterns[0] ?? (detail.blocked ? "guard-blocked" : null),
     blocked,
     isExcepted,
-    firstSeen:       prev?.firstSeen ?? Date.now(),
-    lastSeen:        Date.now(),
+    firstSeen: prev?.firstSeen ?? Date.now(),
+    lastSeen: Date.now(),
   };
 
   tabDiscovered[tabId] = map;
@@ -368,7 +384,9 @@ async function recordObserve(tabId, detail) {
 
 async function recordObserveReady(tabId) {
   if (tabId == null) return;
-  const { tabObserveReady = {} } = await chrome.storage.session.get({ tabObserveReady: {} });
+  const { tabObserveReady = {} } = await chrome.storage.session.get({
+    tabObserveReady: {},
+  });
   tabObserveReady[tabId] = { at: Date.now() };
   await chrome.storage.session.set({ tabObserveReady });
 }
@@ -380,31 +398,35 @@ async function clearTabDataOnNavigate(tabId) {
     tabStats: {},
     tabObserveReady: {},
   });
-  const tabDiscovered  = { ...data.tabDiscovered };
-  const tabStats       = { ...data.tabStats };
+  const tabDiscovered = { ...data.tabDiscovered };
+  const tabStats = { ...data.tabStats };
   const tabObserveReady = { ...data.tabObserveReady };
   delete tabDiscovered[tabId];
   delete tabStats[tabId];
   delete tabObserveReady[tabId];
-  await chrome.storage.session.set({ tabDiscovered, tabStats, tabObserveReady });
+  await chrome.storage.session.set({
+    tabDiscovered,
+    tabStats,
+    tabObserveReady,
+  });
 }
 
 chrome.runtime.onInstalled.addListener(async () => {
   const sync = await chrome.storage.sync.get({
-    enabled:      null,
-    allowlist:    null,
-    features:     null,
+    enabled: null,
+    allowlist: null,
+    features: null,
     siteOverrides: null,
     customPatterns: null,
-    exceptions:   null,   
+    exceptions: null,
   });
   const patch = {};
-  if (sync.enabled       === null) patch.enabled       = true;
-  if (sync.allowlist     === null) patch.allowlist     = [];
-  if (sync.features      === null) patch.features      = DEFAULT_FEATURES;
+  if (sync.enabled === null) patch.enabled = true;
+  if (sync.allowlist === null) patch.allowlist = [];
+  if (sync.features === null) patch.features = DEFAULT_FEATURES;
   if (sync.siteOverrides === null) patch.siteOverrides = {};
-  if (sync.customPatterns=== null) patch.customPatterns= [];
-  if (sync.exceptions    === null) patch.exceptions    = [];   
+  if (sync.customPatterns === null) patch.customPatterns = [];
+  if (sync.exceptions === null) patch.exceptions = [];
   if (Object.keys(patch).length) await chrome.storage.sync.set(patch);
   await preloadStatusBitmaps();
   await refreshAllBadges();
@@ -416,7 +438,6 @@ chrome.runtime.onStartup.addListener(async () => {
 });
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-
   if (msg.type === "getInjectConfig") {
     getInjectDecision(msg.hostname, sender.tab?.id).then(sendResponse);
     return true;
@@ -428,7 +449,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg.type === "recordObserve") {
-    recordObserve(sender.tab?.id, msg.detail).then(() => sendResponse({ ok: true }));
+    recordObserve(sender.tab?.id, msg.detail).then(() =>
+      sendResponse({ ok: true }),
+    );
     return true;
   }
 
@@ -449,21 +472,29 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg.type === "recordObserveReady") {
-    recordObserveReady(sender.tab?.id).then(() => sendResponse({ ok: true })).catch(() => sendResponse({ ok: false }));
+    recordObserveReady(sender.tab?.id)
+      .then(() => sendResponse({ ok: true }))
+      .catch(() => sendResponse({ ok: false }));
     return true;
   }
 
   if (msg.type === "refreshBadge") {
     if (msg.tabId > 0) {
-      updateActionForTab(msg.tabId).then(() => sendResponse({ ok: true })).catch(() => sendResponse({ ok: false }));
+      updateActionForTab(msg.tabId)
+        .then(() => sendResponse({ ok: true }))
+        .catch(() => sendResponse({ ok: false }));
     } else {
-      refreshAllBadges().then(() => sendResponse({ ok: true })).catch(() => sendResponse({ ok: false }));
+      refreshAllBadges()
+        .then(() => sendResponse({ ok: true }))
+        .catch(() => sendResponse({ ok: false }));
     }
     return true;
   }
 
   if (msg.type === "refreshAllBadges") {
-    refreshAllBadges().then(() => sendResponse({ ok: true })).catch(() => sendResponse({ ok: false }));
+    refreshAllBadges()
+      .then(() => sendResponse({ ok: true }))
+      .catch(() => sendResponse({ ok: false }));
     return true;
   }
 
@@ -499,14 +530,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
-  
-
-  
   if (msg.type === "addException") {
     (async () => {
       const { url, pattern: explicit } = msg;
       const pattern = explicit ?? (url ? exceptionPatternFromUrl(url) : null);
-      if (!pattern) { sendResponse({ ok: false, error: "no pattern" }); return; }
+      if (!pattern) {
+        sendResponse({ ok: false, error: "no pattern" });
+        return;
+      }
 
       const sync = await chrome.storage.sync.get({ exceptions: [] });
       const exceptions = [...new Set([...(sync.exceptions ?? []), pattern])];
@@ -517,11 +548,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
-  
   if (msg.type === "removeException") {
     (async () => {
       const sync = await chrome.storage.sync.get({ exceptions: [] });
-      const exceptions = (sync.exceptions ?? []).filter((e) => e !== msg.pattern);
+      const exceptions = (sync.exceptions ?? []).filter(
+        (e) => e !== msg.pattern,
+      );
       await chrome.storage.sync.set({ exceptions });
       await refreshAllBadges();
       sendResponse({ ok: true });
@@ -529,7 +561,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
-  
   if (msg.type === "getExceptions") {
     chrome.storage.sync.get({ exceptions: [] }).then((sync) => {
       sendResponse({ exceptions: sync.exceptions ?? [] });
@@ -544,16 +575,21 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   chrome.storage.session.get(
     { tabSession: {}, tabStats: {}, tabDiscovered: {}, tabObserveReady: {} },
     (data) => {
-      const tabSession      = { ...data.tabSession };
-      const tabStats        = { ...data.tabStats };
-      const tabDiscovered   = { ...data.tabDiscovered };
+      const tabSession = { ...data.tabSession };
+      const tabStats = { ...data.tabStats };
+      const tabDiscovered = { ...data.tabDiscovered };
       const tabObserveReady = { ...data.tabObserveReady };
       delete tabSession[tabId];
       delete tabStats[tabId];
       delete tabDiscovered[tabId];
       delete tabObserveReady[tabId];
-      chrome.storage.session.set({ tabSession, tabStats, tabDiscovered, tabObserveReady });
-    }
+      chrome.storage.session.set({
+        tabSession,
+        tabStats,
+        tabDiscovered,
+        tabObserveReady,
+      });
+    },
   );
 });
 
