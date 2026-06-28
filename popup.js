@@ -405,6 +405,7 @@ function renderFeaturesInto(containerEl, keysFilter, sync) {
                 features: { ...DEFAULT_FEATURES, ...cfg.features, ...updates },
               });
             }
+            showReloadNotice();
             return;
           }
         }
@@ -451,6 +452,7 @@ function renderFeaturesInto(containerEl, keysFilter, sync) {
           if (childCb) childCb.disabled = !cb.checked || isDisabled;
           childItem.classList.toggle("feat-child-off", !cb.checked);
         });
+      showReloadNotice();
     });
 
     item.append(top, hintEl, tags);
@@ -886,6 +888,7 @@ async function setTabSession(mode) {
   setSessionUi(mode);
   await refreshSiteStatus();
   refreshBadge();
+  showReloadNotice();
 }
 
 async function refreshSiteStatus() {
@@ -1010,6 +1013,7 @@ enabledEl.addEventListener("change", async () => {
   renderFeatures(sync);
   await refreshSiteStatus();
   refreshBadge();
+  showReloadNotice();
 });
 
 siteCustomEl.addEventListener("change", async () => {
@@ -1028,6 +1032,7 @@ siteCustomEl.addEventListener("change", async () => {
   }
   await chrome.storage.sync.set({ siteOverrides: so });
   renderFeatures(await readSync());
+  showReloadNotice();
 });
 
 sessionBtns.default.addEventListener("click", () => setTabSession("default"));
