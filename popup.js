@@ -26,6 +26,7 @@ const navDiscoverBadgeEl = document.getElementById("nav-discover-badge");
 const navExceptionsBadgeEl = document.getElementById("nav-exceptions-badge");
 const exceptionsListEl = document.getElementById("exceptions-list");
 const reloadNoticeEl = document.getElementById("reload-notice");
+const settingsNoticeEl = document.getElementById("settings-notice");
 const featuresHintEl = document.getElementById("features-hint");
 
 const sessionBtns = {
@@ -140,6 +141,15 @@ function showReloadNotice() {
   };
 }
 
+function showSettingsNotice() {
+  if (!settingsNoticeEl) return;
+  settingsNoticeEl.classList.remove("hidden");
+  settingsNoticeEl.onclick = () => {
+    settingsNoticeEl.classList.add("hidden");
+    showPanel("blocking");
+  };
+}
+
 function setHeaderStatus(state, label) {
   if (!currentHost) {
     headerStatusEl.classList.add("hidden");
@@ -231,6 +241,7 @@ async function addDomain(raw) {
   renderAllowlist(next);
   await refreshSiteStatus();
   refreshBadge();
+  showSettingsNotice();
 }
 
 const KEY_EVENTS = {
@@ -314,17 +325,29 @@ const BLOCKING_KEYS = new Set([
 ]);
 
 function getFeaturesForEditing(sync) {
-  if (
+  const features =
     editingSiteCustom &&
     currentHost &&
     sync.siteOverrides?.[currentHost]?.features
-  )
-    return {
-      ...DEFAULT_FEATURES,
-      ...sync.features,
-      ...sync.siteOverrides[currentHost].features,
-    };
-  return { ...DEFAULT_FEATURES, ...sync.features };
+      ? {
+          ...DEFAULT_FEATURES,
+          ...sync.features,
+          ...sync.siteOverrides[currentHost].features,
+        }
+      : { ...DEFAULT_FEATURES, ...sync.features };
+
+  for (const { key, parentKey } of SETTINGS_META) {
+    if (
+      parentKey &&
+      key.startsWith("block") &&
+      features[key] &&
+      features[parentKey]
+    ) {
+      features[parentKey] = false;
+    }
+  }
+
+  return features;
 }
 
 function renderFeaturesInto(containerEl, keysFilter, sync) {
@@ -889,6 +912,7 @@ async function setTabSession(mode) {
   await refreshSiteStatus();
   refreshBadge();
   showReloadNotice();
+  if (mode === "active") showSettingsNotice();
 }
 
 async function refreshSiteStatus() {
