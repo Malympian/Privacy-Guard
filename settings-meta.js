@@ -1,5 +1,4 @@
 const SETTINGS_META = [
-  
   {
     key: "blockTrackingRequests",
     label: "Block analytics & tracking requests",
@@ -26,14 +25,6 @@ const SETTINGS_META = [
     hint: "Replaces navigator.getBattery() with a rejected Promise — battery level and charge rate are a stable fingerprint.",
   },
 
-  
-  
-  
-  
-  
-  
-  
-  
   {
     key: "spoofCamera",
     label: "Blur camera feed",
@@ -69,7 +60,6 @@ const SETTINGS_META = [
     parentKey: "blockMicrophone",
   },
 
-  
   {
     key: "spoofTabVisibility",
     label: "Pretend the tab is always visible",
@@ -81,14 +71,12 @@ const SETTINGS_META = [
     hint: "focus and blur events; patches document.hasFocus().",
   },
 
-  
   {
     key: "blockTabEnumeration",
     label: "Hide other open tabs & windows",
     hint: "Neuters BroadcastChannel and SharedWorker (common leader-election tricks for counting tabs) and drops page-registered 'storage' event listeners — a site can no longer tell how many other tabs or windows of it you have open.",
   },
 
-  
   {
     key: "spoofReferrer",
     label: "Hide the page that linked you here",
@@ -100,7 +88,6 @@ const SETTINGS_META = [
     hint: "Strips transferSize/encodedBodySize and rounds timing precision in the Resource Timing API, so a site can't infer your other browsing history by checking whether a shared resource (CDN script, font, pixel) is already in your cache.",
   },
 
-  
   {
     key: "spoofScreenSize",
     label: "Spoof screen dimensions",
@@ -117,7 +104,6 @@ const SETTINGS_META = [
     hint: "Adds ±0.5 ms noise to performance.now(), requestAnimationFrame timestamps, and Date.now() — defeats direct-poll timing fingerprints.",
   },
 
-  
   {
     key: "spoofKeyboardTiming",
     label: "Obscure typing rhythm",
@@ -130,7 +116,6 @@ const SETTINGS_META = [
     parentKey: "spoofKeyboardTiming",
   },
 
-  
   {
     key: "spoofMouseMovement",
     label: "Obscure mouse movement",
@@ -143,7 +128,6 @@ const SETTINGS_META = [
     parentKey: "spoofMouseMovement",
   },
 
-  
   {
     key: "spoofClicks",
     label: "Obscure click positions",
@@ -156,7 +140,6 @@ const SETTINGS_META = [
     parentKey: "spoofClicks",
   },
 
-  
   {
     key: "spoofTouch",
     label: "Obscure touch gestures",
@@ -169,7 +152,6 @@ const SETTINGS_META = [
     parentKey: "spoofTouch",
   },
 
-  
   {
     key: "spoofFormInput",
     label: "Obscure form field activity",
@@ -182,7 +164,6 @@ const SETTINGS_META = [
     parentKey: "spoofFormInput",
   },
 
-  
   {
     key: "blockClipboard",
     label: "Block clipboard event tracking",
@@ -194,7 +175,6 @@ const SETTINGS_META = [
     hint: "Drops selectionchange and selectstart listeners — page scripts cannot detect when you highlight text.",
   },
 
-  
   {
     key: "spoofScreenCapture",
     label: "Pixelate screen capture instead of blocking",
@@ -207,7 +187,6 @@ const SETTINGS_META = [
     parentKey: "spoofScreenCapture",
   },
 
-  
   {
     key: "blockScrollTracking",
     label: "Block scroll event tracking",
@@ -217,18 +196,9 @@ const SETTINGS_META = [
 
 const DEFAULT_FEATURES = {
   ...Object.fromEntries(
-    SETTINGS_META.map(({ key, parentKey }) => [
-      key,
-      
-      parentKey ? false : true,
-    ]),
+    SETTINGS_META.map(({ key, parentKey }) => [key, parentKey ? false : true]),
   ),
-  
-  
-  
-  
-  
-  
+
   spoofCamera: false,
   spoofMicrophone: false,
 };
