@@ -1,49 +1,51 @@
 importScripts("icon-render.js");
 
 const DEFAULT_FEATURES = {
-  blockTrackingRequests: true,
-  blockTrackingPixels: true,
-  blockKnownTrackers: true,
-  blockWebRTC: true,
-  blockBattery: true,
+  blockTrackingRequests: false,
+  blockTrackingPixels: false,
+  blockKnownTrackers: false,
+  blockWebRTC: false,
+  blockBattery: false,
 
   spoofCamera: false,
   blockCamera: false,
+  fakeGrantCamera: false,
   spoofMicrophone: false,
   blockMicrophone: false,
+  fakeGrantMicrophone: false,
 
-  spoofTabVisibility: true,
-  spoofFocus: true,
+  spoofTabVisibility: false,
+  spoofFocus: false,
 
-  blockTabEnumeration: true,
+  blockTabEnumeration: false,
 
-  spoofReferrer: true,
-  blockCacheTimingProbe: true,
+  spoofReferrer: false,
+  blockCacheTimingProbe: false,
 
-  spoofScreenSize: true,
-  spoofScrollDepth: true,
-  spoofPerformanceTiming: true,
+  spoofScreenSize: false,
+  spoofScrollDepth: false,
+  spoofPerformanceTiming: false,
 
-  spoofKeyboardTiming: true,
+  spoofKeyboardTiming: false,
   blockKeyboardEvents: false,
 
-  spoofMouseMovement: true,
+  spoofMouseMovement: false,
   blockMouseEvents: false,
 
-  spoofClicks: true,
+  spoofClicks: false,
   blockClickEvents: false,
 
-  spoofTouch: true,
+  spoofTouch: false,
   blockTouchEvents: false,
 
-  spoofFormInput: true,
+  spoofFormInput: false,
   blockFormEvents: false,
 
-  blockClipboard: true,
-  blockSelection: true,
+  blockClipboard: false,
+  blockSelection: false,
 
-  spoofScreenCapture: true,
-  blockScreenCapture: true,
+  spoofScreenCapture: false,
+  blockScreenCapture: false,
 
   blockScrollTracking: false,
 };
