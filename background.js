@@ -328,7 +328,9 @@ async function recordBlock(tabId, url) {
   if (tabId == null) return;
 
   try {
-    const { tabStats = {} } = await chrome.storage.session.get({ tabStats: {} });
+    const { tabStats = {} } = await chrome.storage.session.get({
+      tabStats: {},
+    });
     const prev = tabStats[tabId] ?? { count: 0, log: [], grouped: {} };
     const now = Date.now();
 
