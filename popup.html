@@ -979,6 +979,22 @@
         background: #fef3c7;
       }
 
+      .settings-notice {
+        background: var(--accent-light);
+        color: var(--accent);
+        border: 1px solid var(--accent-border);
+        border-radius: var(--radius-sm);
+        font-size: 11px;
+        font-weight: 500;
+        padding: 7px 11px;
+        cursor: pointer;
+        text-align: center;
+        flex-shrink: 0;
+      }
+      .settings-notice:hover {
+        background: #dbeafe;
+      }
+
       .snooze-alert {
         font-size: 11px;
         font-weight: 600;
@@ -1276,6 +1292,10 @@
       <div class="main">
         <div id="reload-notice" class="reload-notice hidden">
           ⟳ Settings changed — click to reload tab
+        </div>
+
+        <div id="settings-notice" class="settings-notice hidden">
+          Protection enabled — tap here to configure your settings →
         </div>
 
         <div id="panel-home" class="panel active">
