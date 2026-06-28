@@ -1,54 +1,4 @@
-importScripts("icon-render.js");
-
-const DEFAULT_FEATURES = {
-  blockTrackingRequests: false,
-  blockTrackingPixels: false,
-  blockKnownTrackers: false,
-  blockWebRTC: false,
-  blockBattery: false,
-
-  spoofCamera: false,
-  blockCamera: false,
-  fakeGrantCamera: false,
-  spoofMicrophone: false,
-  blockMicrophone: false,
-  fakeGrantMicrophone: false,
-
-  spoofTabVisibility: false,
-  spoofFocus: false,
-
-  blockTabEnumeration: false,
-
-  spoofReferrer: false,
-  blockCacheTimingProbe: false,
-
-  spoofScreenSize: false,
-  spoofScrollDepth: false,
-  spoofPerformanceTiming: false,
-
-  spoofKeyboardTiming: false,
-  blockKeyboardEvents: false,
-
-  spoofMouseMovement: false,
-  blockMouseEvents: false,
-
-  spoofClicks: false,
-  blockClickEvents: false,
-
-  spoofTouch: false,
-  blockTouchEvents: false,
-
-  spoofFormInput: false,
-  blockFormEvents: false,
-
-  blockClipboard: false,
-  blockSelection: false,
-
-  spoofScreenCapture: false,
-  blockScreenCapture: false,
-
-  blockScrollTracking: false,
-};
+importScripts("settings-meta.js", "icon-render.js");
 
 const DEFAULT_BLOCKED_PATTERNS = [
   "/quiz_submission_events",
@@ -131,7 +81,7 @@ function getExceptions(sync) {
 function exceptionPatternFromUrl(rawUrl) {
   try {
     const u = new URL(rawUrl);
-    return u.origin + u.pathname; // e.g. "https://example.com/events"
+    return u.origin + u.pathname;
   } catch {
     return rawUrl;
   }
