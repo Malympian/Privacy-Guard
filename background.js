@@ -291,19 +291,30 @@ async function updateActionForTab(tabId) {
   let tab;
   try {
     tab = await chrome.tabs.get(tabId);
-  } catch {
-    return;
+  } catch (error) {
+    // Tab no longer exists — this is expected when tabs close
+    if (error.message?.includes("No tab with id")) {
+      return;
+    }
+    throw error;
   }
 
-  const appearance = await computeTabAppearance(tabId, tab);
-  await applyAppearance({ tabId }, appearance);
+  try {
+    const appearance = await computeTabAppearance(tabId, tab);
+    await applyAppearance({ tabId }, appearance);
 
-  const [active] = await chrome.tabs.query({
-    active: true,
-    currentWindow: true,
-  });
-  if (active?.id === tabId) {
-    await applyAppearance({}, appearance);
+    const [active] = await chrome.tabs.query({
+      active: true,
+      currentWindow: true,
+    });
+    if (active?.id === tabId) {
+      await applyAppearance({}, appearance);
+    }
+  } catch (error) {
+    // Silently ignore errors for stale tab operations
+    if (!error.message?.includes("No tab with id")) {
+      throw error;
+    }
   }
 }
 
@@ -316,25 +327,32 @@ async function refreshAllBadges() {
 async function recordBlock(tabId, url) {
   if (tabId == null) return;
 
-  const { tabStats = {} } = await chrome.storage.session.get({ tabStats: {} });
-  const prev = tabStats[tabId] ?? { count: 0, log: [], grouped: {} };
-  const now = Date.now();
+  try {
+    const { tabStats = {} } = await chrome.storage.session.get({ tabStats: {} });
+    const prev = tabStats[tabId] ?? { count: 0, log: [], grouped: {} };
+    const now = Date.now();
 
-  const entry = { url, at: now };
-  const log = [entry, ...prev.log].slice(0, MAX_LOG);
+    const entry = { url, at: now };
+    const log = [entry, ...prev.log].slice(0, MAX_LOG);
 
-  const grouped = { ...(prev.grouped ?? {}) };
-  const g = grouped[url];
-  grouped[url] = {
-    url,
-    hits: (g?.hits ?? 0) + 1,
-    lastSeen: now,
-    firstSeen: g?.firstSeen ?? now,
-  };
+    const grouped = { ...(prev.grouped ?? {}) };
+    const g = grouped[url];
+    grouped[url] = {
+      url,
+      hits: (g?.hits ?? 0) + 1,
+      lastSeen: now,
+      firstSeen: g?.firstSeen ?? now,
+    };
 
-  tabStats[tabId] = { count: prev.count + 1, log, grouped };
-  await chrome.storage.session.set({ tabStats });
-  await updateActionForTab(tabId);
+    tabStats[tabId] = { count: prev.count + 1, log, grouped };
+    await chrome.storage.session.set({ tabStats });
+    await updateActionForTab(tabId);
+  } catch (error) {
+    // Tab no longer exists — expected for closed tabs
+    if (!error.message?.includes("No tab with id")) {
+      throw error;
+    }
+  }
 }
 
 async function recordObserve(tabId, detail) {
