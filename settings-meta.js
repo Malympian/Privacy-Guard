@@ -195,10 +195,5 @@ const SETTINGS_META = [
 ];
 
 const DEFAULT_FEATURES = {
-  ...Object.fromEntries(
-    SETTINGS_META.map(({ key, parentKey }) => [key, parentKey ? false : true]),
-  ),
-
-  spoofCamera: false,
-  spoofMicrophone: false,
+  ...Object.fromEntries(SETTINGS_META.map(({ key }) => [key, false])),
 };
