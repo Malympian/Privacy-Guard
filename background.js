@@ -49,6 +49,7 @@ const DEFAULT_FEATURES = {
 };
 
 const DEFAULT_BLOCKED_PATTERNS = [
+  "/quiz_submission_events",
   "/events",
   "/analytics",
   "/error_reports",
@@ -128,7 +129,7 @@ function getExceptions(sync) {
 function exceptionPatternFromUrl(rawUrl) {
   try {
     const u = new URL(rawUrl);
-    return u.origin + u.pathname;
+    return u.origin + u.pathname; // e.g. "https://example.com/events"
   } catch {
     return rawUrl;
   }
@@ -187,6 +188,7 @@ async function applyAppearance(target, { status, blockCount = 0, title }) {
     const imageData = await buildActionIconImageData(status, blockCount);
     await chrome.action.setIcon({ ...target, imageData });
   } catch (err) {
+    if (err?.message?.includes("No tab with id")) return;
     try {
       await chrome.action.setIcon({
         ...target,
@@ -291,30 +293,19 @@ async function updateActionForTab(tabId) {
   let tab;
   try {
     tab = await chrome.tabs.get(tabId);
-  } catch (error) {
-    // Tab no longer exists — this is expected when tabs close
-    if (error.message?.includes("No tab with id")) {
-      return;
-    }
-    throw error;
+  } catch {
+    return;
   }
 
-  try {
-    const appearance = await computeTabAppearance(tabId, tab);
-    await applyAppearance({ tabId }, appearance);
+  const appearance = await computeTabAppearance(tabId, tab);
+  await applyAppearance({ tabId }, appearance);
 
-    const [active] = await chrome.tabs.query({
-      active: true,
-      currentWindow: true,
-    });
-    if (active?.id === tabId) {
-      await applyAppearance({}, appearance);
-    }
-  } catch (error) {
-    // Silently ignore errors for stale tab operations
-    if (!error.message?.includes("No tab with id")) {
-      throw error;
-    }
+  const [active] = await chrome.tabs.query({
+    active: true,
+    currentWindow: true,
+  });
+  if (active?.id === tabId) {
+    await applyAppearance({}, appearance);
   }
 }
 
@@ -327,34 +318,25 @@ async function refreshAllBadges() {
 async function recordBlock(tabId, url) {
   if (tabId == null) return;
 
-  try {
-    const { tabStats = {} } = await chrome.storage.session.get({
-      tabStats: {},
-    });
-    const prev = tabStats[tabId] ?? { count: 0, log: [], grouped: {} };
-    const now = Date.now();
+  const { tabStats = {} } = await chrome.storage.session.get({ tabStats: {} });
+  const prev = tabStats[tabId] ?? { count: 0, log: [], grouped: {} };
+  const now = Date.now();
 
-    const entry = { url, at: now };
-    const log = [entry, ...prev.log].slice(0, MAX_LOG);
+  const entry = { url, at: now };
+  const log = [entry, ...prev.log].slice(0, MAX_LOG);
 
-    const grouped = { ...(prev.grouped ?? {}) };
-    const g = grouped[url];
-    grouped[url] = {
-      url,
-      hits: (g?.hits ?? 0) + 1,
-      lastSeen: now,
-      firstSeen: g?.firstSeen ?? now,
-    };
+  const grouped = { ...(prev.grouped ?? {}) };
+  const g = grouped[url];
+  grouped[url] = {
+    url,
+    hits: (g?.hits ?? 0) + 1,
+    lastSeen: now,
+    firstSeen: g?.firstSeen ?? now,
+  };
 
-    tabStats[tabId] = { count: prev.count + 1, log, grouped };
-    await chrome.storage.session.set({ tabStats });
-    await updateActionForTab(tabId);
-  } catch (error) {
-    // Tab no longer exists — expected for closed tabs
-    if (!error.message?.includes("No tab with id")) {
-      throw error;
-    }
-  }
+  tabStats[tabId] = { count: prev.count + 1, log, grouped };
+  await chrome.storage.session.set({ tabStats });
+  await updateActionForTab(tabId);
 }
 
 async function recordObserve(tabId, detail) {
@@ -591,26 +573,29 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return false;
 });
 
-chrome.tabs.onRemoved.addListener((tabId) => {
-  chrome.storage.session.get(
-    { tabSession: {}, tabStats: {}, tabDiscovered: {}, tabObserveReady: {} },
-    (data) => {
-      const tabSession = { ...data.tabSession };
-      const tabStats = { ...data.tabStats };
-      const tabDiscovered = { ...data.tabDiscovered };
-      const tabObserveReady = { ...data.tabObserveReady };
-      delete tabSession[tabId];
-      delete tabStats[tabId];
-      delete tabDiscovered[tabId];
-      delete tabObserveReady[tabId];
-      chrome.storage.session.set({
-        tabSession,
-        tabStats,
-        tabDiscovered,
-        tabObserveReady,
-      });
-    },
-  );
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+  try {
+    const data = await chrome.storage.session.get({
+      tabSession: {},
+      tabStats: {},
+      tabDiscovered: {},
+      tabObserveReady: {},
+    });
+    const tabSession = { ...data.tabSession };
+    const tabStats = { ...data.tabStats };
+    const tabDiscovered = { ...data.tabDiscovered };
+    const tabObserveReady = { ...data.tabObserveReady };
+    delete tabSession[tabId];
+    delete tabStats[tabId];
+    delete tabDiscovered[tabId];
+    delete tabObserveReady[tabId];
+    await chrome.storage.session.set({
+      tabSession,
+      tabStats,
+      tabDiscovered,
+      tabObserveReady,
+    });
+  } catch {}
 });
 
 chrome.tabs.onActivated.addListener(({ tabId }) => {
@@ -620,7 +605,7 @@ chrome.tabs.onActivated.addListener(({ tabId }) => {
 
 chrome.tabs.onUpdated.addListener((tabId, info) => {
   if (info.status === "loading") {
-    clearTabDataOnNavigate(tabId);
+    clearTabDataOnNavigate(tabId).catch(() => {});
   }
   if (info.status === "complete" || info.url) {
     updateActionForTab(tabId).catch(() => {});
@@ -628,5 +613,5 @@ chrome.tabs.onUpdated.addListener((tabId, info) => {
 });
 
 chrome.storage.onChanged.addListener((_, area) => {
-  if (area === "sync" || area === "session") refreshAllBadges();
+  if (area === "sync" || area === "session") refreshAllBadges().catch(() => {});
 });
