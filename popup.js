@@ -135,7 +135,9 @@ function showReloadNotice() {
   _reloadNoticePending = true;
   reloadNoticeEl.classList.remove("hidden");
   reloadNoticeEl.onclick = () => {
-    if (currentTabId != null) chrome.tabs.reload(currentTabId);
+    if (currentTabId != null) {
+      chrome.tabs.reload(currentTabId).catch(() => {});
+    }
     reloadNoticeEl.classList.add("hidden");
     _reloadNoticePending = false;
   };
@@ -911,8 +913,12 @@ async function setTabSession(mode) {
   setSessionUi(mode);
   await refreshSiteStatus();
   refreshBadge();
-  showReloadNotice();
-  if (mode === "active") showSettingsNotice();
+
+  if (mode === "active") {
+    showSettingsNotice();
+  } else {
+    showReloadNotice();
+  }
 }
 
 async function refreshSiteStatus() {
@@ -1056,7 +1062,8 @@ siteCustomEl.addEventListener("change", async () => {
   }
   await chrome.storage.sync.set({ siteOverrides: so });
   renderFeatures(await readSync());
-  showReloadNotice();
+
+  if (siteCustomEl.checked) showSettingsNotice();
 });
 
 sessionBtns.default.addEventListener("click", () => setTabSession("default"));
