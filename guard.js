@@ -1304,6 +1304,45 @@
         console.warn("[privacy-guard] spoofCanvasNoise patch failed:", e);
       }
     }
+
+    if (typeof OffscreenCanvas !== "undefined") {
+      try {
+        const _ocGetImageData =
+          OffscreenCanvasRenderingContext2D.prototype.getImageData;
+        OffscreenCanvasRenderingContext2D.prototype.getImageData = function (
+          ...args
+        ) {
+          const id = _ocGetImageData.apply(this, args);
+          if (features.blockCanvas) {
+            return new ImageData(Math.max(1, id.width), Math.max(1, id.height));
+          }
+          noisePixels(id.data);
+          return id;
+        };
+      } catch (e) {}
+      try {
+        const _convertToBlob = OffscreenCanvas.prototype.convertToBlob;
+        OffscreenCanvas.prototype.convertToBlob = async function (opts) {
+          if (features.blockCanvas) {
+            const blank = new OffscreenCanvas(
+              Math.max(1, this.width),
+              Math.max(1, this.height),
+            );
+            return _convertToBlob.call(blank, opts);
+          }
+
+          try {
+            const ctx2d = this.getContext("2d");
+            if (ctx2d) {
+              const id = ctx2d.getImageData(0, 0, this.width, this.height);
+              noisePixels(id.data);
+              ctx2d.putImageData(id, 0, 0);
+            }
+          } catch {}
+          return _convertToBlob.call(this, opts);
+        };
+      } catch (e) {}
+    }
   }
 
   if (features.spoofWebGL || features.blockWebGL) {
@@ -1341,12 +1380,7 @@
         try {
           const _getExt = proto.getExtension;
           proto.getExtension = function (name) {
-            if (name === "WEBGL_debug_renderer_info") {
-              return {
-                UNMASKED_VENDOR_WEBGL: 0x9245,
-                UNMASKED_RENDERER_WEBGL: 0x9246,
-              };
-            }
+            if (name === "WEBGL_debug_renderer_info") return null;
             return _getExt.call(this, name);
           };
         } catch (e) {}
@@ -1521,16 +1555,18 @@
       const _getBCR = Element.prototype.getBoundingClientRect;
       Element.prototype.getBoundingClientRect = function () {
         const r = _getBCR.call(this);
-        const n = (Math.random() - 0.5) * 0.5;
+
+        const nx = (Math.random() - 0.5) * 2;
+        const ny = (Math.random() - 0.5) * 2;
         return {
-          top: r.top + n,
-          left: r.left + n,
-          bottom: r.bottom + n,
-          right: r.right + n,
-          width: r.width + n,
-          height: r.height + n,
-          x: r.x + n,
-          y: r.y + n,
+          top: r.top + ny,
+          left: r.left + nx,
+          bottom: r.bottom + ny,
+          right: r.right + nx,
+          width: r.width + nx,
+          height: r.height + ny,
+          x: r.x + nx,
+          y: r.y + ny,
           toJSON() {
             return {
               top: this.top,
@@ -1548,32 +1584,71 @@
     } catch (e) {}
 
     try {
+      const _owDesc = Object.getOwnPropertyDescriptor(
+        HTMLElement.prototype,
+        "offsetWidth",
+      );
+      if (_owDesc?.get) {
+        Object.defineProperty(HTMLElement.prototype, "offsetWidth", {
+          get() {
+            return Math.round(
+              _owDesc.get.call(this) + (Math.random() - 0.5) * 2,
+            );
+          },
+          configurable: true,
+        });
+      }
+    } catch (e) {}
+    try {
+      const _ohDesc = Object.getOwnPropertyDescriptor(
+        HTMLElement.prototype,
+        "offsetHeight",
+      );
+      if (_ohDesc?.get) {
+        Object.defineProperty(HTMLElement.prototype, "offsetHeight", {
+          get() {
+            return Math.round(
+              _ohDesc.get.call(this) + (Math.random() - 0.5) * 2,
+            );
+          },
+          configurable: true,
+        });
+      }
+    } catch (e) {}
+
+    try {
       const _getClientRects = Element.prototype.getClientRects;
       Element.prototype.getClientRects = function () {
         const rects = _getClientRects.call(this);
-        const n = (Math.random() - 0.5) * 0.5;
-        return Array.from(rects).map((r) => ({
-          top: r.top + n,
-          left: r.left + n,
-          bottom: r.bottom + n,
-          right: r.right + n,
-          width: r.width + n,
-          height: r.height + n,
-          x: r.x + n,
-          y: r.y + n,
-          toJSON() {
-            return {
-              top: this.top,
-              left: this.left,
-              bottom: this.bottom,
-              right: this.right,
-              width: this.width,
-              height: this.height,
-              x: this.x,
-              y: this.y,
-            };
+        const nx = (Math.random() - 0.5) * 2;
+        const ny = (Math.random() - 0.5) * 2;
+
+        return new Proxy(rects, {
+          get(target, prop) {
+            const val = target[prop];
+            if (
+              typeof prop === "string" &&
+              /^\d+$/.test(prop) &&
+              val instanceof DOMRect
+            ) {
+              return new DOMRect(
+                val.x + nx,
+                val.y + ny,
+                val.width + nx,
+                val.height + ny,
+              );
+            }
+            if (prop === "item") {
+              return (i) => {
+                const r = target.item(i);
+                return r instanceof DOMRect
+                  ? new DOMRect(r.x + nx, r.y + ny, r.width + nx, r.height + ny)
+                  : r;
+              };
+            }
+            return typeof val === "function" ? val.bind(target) : val;
           },
-        }));
+        });
       };
     } catch (e) {}
   }
@@ -1581,19 +1656,16 @@
   if (features.spoofSpeechSynthesis || features.blockSpeechSynthesis) {
     if (typeof SpeechSynthesis !== "undefined" && globalThis.speechSynthesis) {
       try {
-        const SPOOF_VOICES = features.blockSpeechSynthesis
-          ? []
-          : [
-              {
-                name: "Google US English",
-                lang: "en-US",
-                localService: false,
-                default: true,
-                voiceURI: "Google US English",
-              },
-            ];
+        const _getVoices = SpeechSynthesis.prototype.getVoices;
         SpeechSynthesis.prototype.getVoices = function () {
-          return SPOOF_VOICES;
+          if (features.blockSpeechSynthesis) return [];
+
+          const real = _getVoices.call(this);
+          const pick =
+            real.find((v) => v.lang === "en-US" && !v.localService) ??
+            real.find((v) => v.lang === "en-US") ??
+            real[0];
+          return pick ? [pick] : [];
         };
       } catch (e) {
         console.warn("[privacy-guard] speechSynthesis patch failed:", e);
@@ -1913,15 +1985,22 @@
 
     try {
       if (navigator.userAgentData) {
+        let _pgChromeVersion = "124";
+        try {
+          const _uaMatch = navigator.userAgent.match(/Chrome\/(\d+)/);
+          if (_uaMatch) _pgChromeVersion = _uaMatch[1];
+        } catch {}
+        const _pgFullVer = _pgChromeVersion + ".0.0.0";
+
         const _pgBrands = Object.freeze([
-          Object.freeze({ brand: "Google Chrome", version: "124" }),
-          Object.freeze({ brand: "Chromium", version: "124" }),
-          Object.freeze({ brand: "Not-A.Brand", version: "99" }),
+          Object.freeze({ brand: "Google Chrome", version: _pgChromeVersion }),
+          Object.freeze({ brand: "Chromium", version: _pgChromeVersion }),
+          Object.freeze({ brand: "Not)A;Brand", version: "99" }),
         ]);
         const _pgFullVersionList = Object.freeze([
-          Object.freeze({ brand: "Google Chrome", version: "124.0.0.0" }),
-          Object.freeze({ brand: "Chromium", version: "124.0.0.0" }),
-          Object.freeze({ brand: "Not-A.Brand", version: "99.0.0.0" }),
+          Object.freeze({ brand: "Google Chrome", version: _pgFullVer }),
+          Object.freeze({ brand: "Chromium", version: _pgFullVer }),
+          Object.freeze({ brand: "Not)A;Brand", version: "99.0.0.0" }),
         ]);
         const _pgUAData = {
           brands: _pgBrands,
@@ -1937,7 +2016,7 @@
               model: "",
               platform: "Windows",
               platformVersion: "15.0.0",
-              uaFullVersion: "124.0.0.0",
+              uaFullVersion: _pgFullVer,
             };
           },
           toJSON() {
