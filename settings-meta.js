@@ -24,6 +24,16 @@ const SETTINGS_META = [
     label: "Block Battery Status API",
     hint: "Replaces navigator.getBattery() with a rejected Promise — battery level and charge rate are a stable fingerprint.",
   },
+  {
+    key: "blockLinkPrefetch",
+    label: "Block link prefetch & prerender",
+    hint: "Removes <link rel='prefetch'>, <link rel='prerender'>, and <link rel='dns-prefetch'> tags added by page scripts — prevents the browser from silently fetching or resolving resources in the background on behalf of a page.",
+  },
+  {
+    key: "stripTrackingParams",
+    label: "Strip tracking URL parameters",
+    hint: "Removes known tracking query parameters (fbclid, gclid, utm_*, _hsenc, mc_eid, mkt_tok, and more) from the current page URL via history.replaceState, and from SPA navigations via pushState. The server still receives them on the initial page load.",
+  },
 
   {
     key: "spoofCamera",
@@ -191,6 +201,98 @@ const SETTINGS_META = [
     key: "blockScrollTracking",
     label: "Block scroll event tracking",
     hint: "Drops all scroll, wheel, and scrollend listeners registered by page scripts. Note: may affect scroll-dependent UI (infinite loaders, sticky headers).",
+  },
+
+  // ── Fingerprinting surface ──────────────────────────────────────────────
+  {
+    key: "spoofCanvasNoise",
+    label: "Add noise to canvas reads",
+    hint: "Flips the least-significant bit of ~5% of colour-channel pixels returned by toDataURL(), toBlob(), and getImageData() — imperceptible visually but breaks pixel-level canvas fingerprinting. The original canvas is never modified.",
+  },
+  {
+    key: "blockCanvas",
+    label: "Block canvas data reads entirely",
+    hint: "toDataURL() and toBlob() return a blank canvas of the same dimensions; getImageData() returns zeroed pixel data. Eliminates all canvas-based fingerprinting but may break sites that rely on canvas for CAPTCHAs or image processing.",
+    parentKey: "spoofCanvasNoise",
+  },
+  {
+    key: "spoofWebGL",
+    label: "Mask WebGL renderer & vendor info",
+    hint: "Hides the WEBGL_debug_renderer_info extension (GPU make/model), spoofs getParameter() renderer strings, and adds imperceptible noise to readPixels() output. GPU identity is the most stable component of a WebGL fingerprint.",
+  },
+  {
+    key: "blockWebGL",
+    label: "Disable WebGL entirely",
+    hint: "getContext('webgl') and getContext('webgl2') return null — no WebGL context is created. Prevents all WebGL fingerprinting but will break 3D graphics and WebGL-based CAPTCHAs.",
+    parentKey: "spoofWebGL",
+  },
+  {
+    key: "spoofAudioFingerprint",
+    label: "Add noise to AudioContext output",
+    hint: "Adds imperceptible sub-LSB noise (~1e-7) to OfflineAudioContext rendered buffers (getChannelData, copyFromChannel) and AnalyserNode reads. The offline audio rendering pipeline produces a hardware-specific signature detectable from audio processing alone.",
+  },
+  {
+    key: "blockAudioFingerprint",
+    label: "Return silence from audio buffer reads",
+    hint: "OfflineAudioContext rendered buffer reads and AnalyserNode reads return all-zero (silent) data, stripping device-specific characteristics from the audio chain. Does not affect audio playback.",
+    parentKey: "spoofAudioFingerprint",
+  },
+  {
+    key: "blockFontFingerprint",
+    label: "Block font enumeration",
+    hint: "Replaces document.fonts with a stub that reports no fonts loaded — prevents sites from probing which installed system fonts resolve vs. fall back, a common and stable fingerprinting technique.",
+  },
+  {
+    key: "spoofSpeechSynthesis",
+    label: "Limit speech synthesis voices",
+    hint: "Returns a single generic voice from speechSynthesis.getVoices() instead of the full device-specific list. Installed OS language packs produce a highly unique voice inventory.",
+  },
+  {
+    key: "blockSpeechSynthesis",
+    label: "Return empty voice list",
+    hint: "speechSynthesis.getVoices() returns an empty array, preventing any voice enumeration fingerprinting entirely.",
+    parentKey: "spoofSpeechSynthesis",
+  },
+  {
+    key: "spoofHardwareConcurrency",
+    label: "Spoof CPU core count",
+    hint: "Reports navigator.hardwareConcurrency as 4 — the most common desktop value. The real core count directly identifies the processor model.",
+  },
+  {
+    key: "spoofDeviceMemory",
+    label: "Spoof device memory",
+    hint: "Reports navigator.deviceMemory as 8 GB. The actual value is rounded to a power of two but still narrows down device class.",
+  },
+  {
+    key: "spoofMediaDevices",
+    label: "Anonymize media device list",
+    hint: "enumerateDevices() returns devices with stripped labels and anonymized IDs. The real device ID is a persistent browser-level identifier, stable across sessions for the same origin.",
+  },
+  {
+    key: "blockMediaDevices",
+    label: "Hide media device list entirely",
+    hint: "enumerateDevices() returns an empty array, preventing any camera or microphone enumeration even when permission was previously granted.",
+    parentKey: "spoofMediaDevices",
+  },
+  {
+    key: "blockNetworkInfo",
+    label: "Block Network Information API",
+    hint: "Returns undefined for navigator.connection — the connection type (4g/3g/wifi), effective bandwidth, and RTT are a soft fingerprint and also reveal rough network conditions.",
+  },
+  {
+    key: "blockPermissionsEnum",
+    label: "Block permissions enumeration",
+    hint: "navigator.permissions.query() always returns 'prompt', preventing sites from probing which permissions (camera, clipboard, notifications, etc.) have already been granted or denied in your browser profile.",
+  },
+  {
+    key: "spoofStorageEstimate",
+    label: "Spoof storage quota",
+    hint: "navigator.storage.estimate() returns a fixed 100 GB quota and minimal usage. The real available storage quota varies by device and browser profile.",
+  },
+  {
+    key: "blockGamepad",
+    label: "Block gamepad enumeration",
+    hint: "navigator.getGamepads() returns an empty array and gamepadconnected/gamepaddisconnected events are suppressed. Connected controller models and their axis/button counts are a stable fingerprint signal.",
   },
 ];
 
