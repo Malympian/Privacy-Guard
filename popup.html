@@ -1125,6 +1125,61 @@
       .hidden {
         display: none !important;
       }
+
+
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        flex-shrink: 0;
+        margin-left: auto;
+        margin-top: 3px;
+        cursor: help;
+        transition: transform 0.12s;
+      }
+      .rec-dot:hover {
+        transform: scale(1.3);
+      }
+      .rec-dot.rec-recommended {
+        background: var(--green);
+        box-shadow: 0 0 0 2.5px var(--green-bg), 0 0 0 3.5px var(--green-border);
+      }
+      .rec-dot.rec-optional {
+        background: #f59e0b;
+        box-shadow: 0 0 0 2.5px var(--yellow-bg), 0 0 0 3.5px var(--yellow-border);
+      }
+      .rec-dot.rec-caution {
+        background: var(--red);
+        box-shadow: 0 0 0 2.5px var(--red-bg), 0 0 0 3.5px var(--red-border);
+      }
+
+      .rec-legend {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        font-size: 9.5px;
+        color: var(--muted);
+        margin-bottom: 9px;
+        padding: 5px 8px;
+        background: var(--surface3);
+        border: 1px solid var(--border-light);
+        border-radius: var(--radius-sm);
+      }
+      .rec-legend-item {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        white-space: nowrap;
+      }
+      .rec-legend .rec-dot {
+        margin-left: 0;
+        margin-top: 0;
+        cursor: default;
+        flex-shrink: 0;
+      }
+      .rec-legend .rec-dot:hover {
+        transform: none;
+      }
     </style>
   </head>
   <body>
@@ -1387,6 +1442,17 @@
               <p class="feat-note"
                 >Intercepts outgoing requests to known tracking endpoints.</p
               >
+              <div class="rec-legend">
+                <div class="rec-legend-item"
+                  ><span class="rec-dot rec-recommended"></span>Suggested</div
+                >
+                <div class="rec-legend-item"
+                  ><span class="rec-dot rec-optional"></span>Optional</div
+                >
+                <div class="rec-legend-item"
+                  ><span class="rec-dot rec-caution"></span>Caution</div
+                >
+              </div>
               <div id="features-list-blocking" class="feat-list"></div>
             </div>
           </div>
@@ -1404,6 +1470,17 @@
                 >Masks browser signals commonly used by analytics and tracking
                 scripts.</p
               >
+              <div class="rec-legend">
+                <div class="rec-legend-item"
+                  ><span class="rec-dot rec-recommended"></span>Suggested</div
+                >
+                <div class="rec-legend-item"
+                  ><span class="rec-dot rec-optional"></span>Optional</div
+                >
+                <div class="rec-legend-item"
+                  ><span class="rec-dot rec-caution"></span>Caution</div
+                >
+              </div>
               <div id="features-list-spoofing" class="feat-list"></div>
             </div>
           </div>
