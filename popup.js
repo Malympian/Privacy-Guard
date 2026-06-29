@@ -39,6 +39,8 @@ let currentTabId = null;
 let currentHost = null;
 let currentSessionMode = "default";
 let editingSiteCustom = false;
+let currentDiscoveredItems = [];
+let currentRecommendations = {};
 
 const menuBtnEl = document.getElementById("menu-btn");
 const navDrawerEl = document.getElementById("nav-drawer");
@@ -307,35 +309,6 @@ const KEY_EVENTS = {
   blockScreenCapture: ["getDisplayMedia", "captureStream"],
 
   blockScrollTracking: ["scroll", "wheel", "scrollend"],
-
-  blockLinkPrefetch: [
-    "<link rel=prefetch>",
-    "<link rel=prerender>",
-    "dns-prefetch",
-  ],
-  stripTrackingParams: ["fbclid", "gclid", "utm_*", "mc_eid", "mkt_tok"],
-
-  spoofCanvasNoise: ["toDataURL()", "getImageData()", "toBlob()"],
-  blockCanvas: ["toDataURL()", "toBlob()", "getImageData()"],
-  spoofWebGL: ["WEBGL_debug_renderer_info", "getParameter()", "readPixels()"],
-  blockWebGL: ["getContext('webgl')", "getContext('webgl2')"],
-  spoofAudioFingerprint: [
-    "getChannelData()",
-    "getFloatFrequencyData()",
-    "copyFromChannel()",
-  ],
-  blockAudioFingerprint: ["OfflineAudioContext", "getChannelData()"],
-  blockFontFingerprint: ["document.fonts", "fonts.check()", "fonts.load()"],
-  spoofSpeechSynthesis: ["speechSynthesis.getVoices()"],
-  blockSpeechSynthesis: ["speechSynthesis.getVoices()"],
-  spoofHardwareConcurrency: ["navigator.hardwareConcurrency"],
-  spoofDeviceMemory: ["navigator.deviceMemory"],
-  spoofMediaDevices: ["enumerateDevices()", "deviceId", "groupId"],
-  blockMediaDevices: ["enumerateDevices()"],
-  blockNetworkInfo: ["navigator.connection", "navigator.mozConnection"],
-  blockPermissionsEnum: ["navigator.permissions.query()"],
-  spoofStorageEstimate: ["navigator.storage.estimate()"],
-  blockGamepad: ["navigator.getGamepads()", "gamepadconnected"],
 };
 
 const BLOCKING_KEYS = new Set([
@@ -344,8 +317,6 @@ const BLOCKING_KEYS = new Set([
   "blockKnownTrackers",
   "blockWebRTC",
   "blockBattery",
-  "blockLinkPrefetch",
-  "stripTrackingParams",
   "blockClipboard",
   "blockSelection",
   "blockScrollTracking",
@@ -356,6 +327,104 @@ const BLOCKING_KEYS = new Set([
   "blockFormEvents",
   "blockTabEnumeration",
 ]);
+
+const FEATURE_RISK = {
+  blockTrackingRequests: { risk: "low", alwaysRecommend: true },
+  blockTrackingPixels: { risk: "low", alwaysRecommend: true },
+  blockKnownTrackers: { risk: "low", alwaysRecommend: true },
+  blockWebRTC: { risk: "low", alwaysRecommend: true },
+  blockBattery: { risk: "low", alwaysRecommend: true },
+  blockGamepad: { risk: "low", alwaysRecommend: true },
+  blockNetworkInfo: { risk: "low", alwaysRecommend: true },
+
+  spoofHardwareConcurrency: { risk: "low", alwaysRecommend: true },
+  spoofDeviceMemory: { risk: "low", alwaysRecommend: true },
+  spoofCanvasNoise: { risk: "low", alwaysRecommend: true },
+  spoofWebGL: { risk: "low", alwaysRecommend: true },
+  spoofAudioFingerprint: { risk: "low", alwaysRecommend: true },
+  spoofSpeechSynthesis: { risk: "low", alwaysRecommend: true },
+
+  blockLinkPrefetch: { risk: "low", signals: ["any"] },
+  spoofTabVisibility: { risk: "low", signals: ["any"] },
+  spoofFocus: { risk: "low", signals: ["session", "any"] },
+  spoofReferrer: { risk: "low", signals: ["analytics", "any"] },
+  blockCacheTimingProbe: { risk: "low", signals: ["analytics"] },
+  spoofScreenSize: { risk: "low", signals: ["any"] },
+  spoofPerformanceTiming: { risk: "low", signals: ["any"] },
+  blockPermissionsEnum: { risk: "low", signals: ["any"] },
+  spoofStorageEstimate: { risk: "low", signals: ["any"] },
+  spoofMediaDevices: { risk: "low", signals: ["any"] },
+  blockAudioFingerprint: { risk: "low", signals: ["any"] },
+  blockSpeechSynthesis: { risk: "low", signals: ["any"] },
+  blockTabEnumeration: { risk: "low", signals: ["session", "any"] },
+  blockSelection: { risk: "low", signals: ["behavioral"] },
+
+  spoofKeyboardTiming: { risk: "low", signals: ["behavioral"] },
+  spoofMouseMovement: { risk: "low", signals: ["behavioral"] },
+  spoofClicks: { risk: "low", signals: ["behavioral", "session"] },
+  spoofTouch: { risk: "low", signals: ["behavioral"] },
+  spoofFormInput: { risk: "low", signals: ["behavioral"] },
+
+  spoofScreenCapture: { risk: "low", signals: [] },
+  blockScreenCapture: { risk: "low", signals: [] },
+
+  stripTrackingParams: { risk: "medium", signals: ["analytics"] },
+  spoofScrollDepth: { risk: "medium", signals: ["behavioral", "session"] },
+  blockScrollTracking: { risk: "medium", signals: ["session", "behavioral"] },
+  blockFontFingerprint: { risk: "medium", signals: ["analytics"] },
+  blockMediaDevices: { risk: "medium", signals: ["behavioral"] },
+  blockClipboard: { risk: "medium", signals: ["behavioral"] },
+  spoofCamera: { risk: "medium", signals: ["behavioral"] },
+  blockCamera: { risk: "medium", signals: ["behavioral"] },
+  fakeGrantCamera: { risk: "medium", signals: ["behavioral"] },
+  spoofMicrophone: { risk: "medium", signals: ["behavioral"] },
+  blockMicrophone: { risk: "medium", signals: ["behavioral"] },
+  fakeGrantMicrophone: { risk: "medium", signals: ["behavioral"] },
+
+  blockKeyboardEvents: { risk: "high" },
+  blockMouseEvents: { risk: "high" },
+  blockClickEvents: { risk: "high" },
+  blockTouchEvents: { risk: "high" },
+  blockFormEvents: { risk: "high" },
+  blockCanvas: { risk: "high" },
+  blockWebGL: { risk: "high" },
+};
+
+function getDetectedSignals(items) {
+  const signals = new Set();
+  for (const item of items || []) {
+    signals.add("any");
+    const u = (item.url || "").toLowerCase();
+    if (/analytic|telemetry|track/.test(u)) signals.add("analytics");
+    if (/pixel|collect/.test(u)) signals.add("pixel");
+    if (/behavior|biometric|keylog/.test(u)) signals.add("behavioral");
+    if (/session/.test(u)) signals.add("session");
+  }
+  return signals;
+}
+
+function computeRecommendations(items) {
+  const signals = getDetectedSignals(items);
+  const recs = {};
+  for (const { key } of SETTINGS_META) {
+    const meta = FEATURE_RISK[key];
+    if (!meta) {
+      recs[key] = "optional";
+      continue;
+    }
+    if (meta.risk === "high") {
+      recs[key] = "caution";
+      continue;
+    }
+    if (meta.alwaysRecommend) {
+      recs[key] = "recommended";
+      continue;
+    }
+    const hit = (meta.signals || []).some((s) => signals.has(s));
+    recs[key] = hit && meta.risk === "low" ? "recommended" : "optional";
+  }
+  return recs;
+}
 
 function getFeaturesForEditing(sync) {
   const features =
@@ -415,7 +484,19 @@ function renderFeaturesInto(containerEl, keysFilter, sync) {
     lbl.htmlFor = "feat_" + key;
     lbl.textContent = label;
 
-    top.append(cb, lbl);
+    const recLevel = currentRecommendations[key] || "optional";
+    const recDot = document.createElement("span");
+    recDot.className = `rec-dot rec-${recLevel}`;
+    const hasSignals = currentDiscoveredItems.length > 0;
+    recDot.title =
+      recLevel === "recommended"
+        ? "Suggested — effective protection with minimal breakage risk" +
+          (hasSignals ? "; tracking signals detected on this page" : "")
+        : recLevel === "caution"
+          ? "Caution — likely to break site functionality; enable only if intentional"
+          : "Optional — no specific tracking signals detected for this feature, or situational use";
+
+    top.append(cb, lbl, recDot);
 
     const hintEl = document.createElement("p");
     hintEl.className = "feat-hint";
@@ -711,6 +792,14 @@ async function renderDiscover() {
   });
   discoverListEl.textContent = "";
   setDiscoverPing(items.length);
+
+  const prevLen = currentDiscoveredItems.length;
+  currentDiscoveredItems = items;
+  currentRecommendations = computeRecommendations(items);
+  if (items.length !== prevLen) {
+    const sync = await readSync();
+    renderFeatures(sync);
+  }
 
   if (!items.length) {
     const li = document.createElement("li");
@@ -1035,6 +1124,17 @@ async function loadTabContext() {
 
     const session = await readSession();
     setSessionUi(session.tabSession?.[currentTabId]?.mode ?? "default");
+
+    try {
+      const { items: preDiscovered = [] } = await sendBg({
+        type: "getDiscovered",
+        tabId: currentTabId,
+      });
+      currentDiscoveredItems = preDiscovered;
+    } catch {
+      currentDiscoveredItems = [];
+    }
+    currentRecommendations = computeRecommendations(currentDiscoveredItems);
 
     await refreshSiteStatus();
     await renderBlockLog();
