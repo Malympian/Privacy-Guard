@@ -307,6 +307,35 @@ const KEY_EVENTS = {
   blockScreenCapture: ["getDisplayMedia", "captureStream"],
 
   blockScrollTracking: ["scroll", "wheel", "scrollend"],
+
+  blockLinkPrefetch: [
+    "<link rel=prefetch>",
+    "<link rel=prerender>",
+    "dns-prefetch",
+  ],
+  stripTrackingParams: ["fbclid", "gclid", "utm_*", "mc_eid", "mkt_tok"],
+
+  spoofCanvasNoise: ["toDataURL()", "getImageData()", "toBlob()"],
+  blockCanvas: ["toDataURL()", "toBlob()", "getImageData()"],
+  spoofWebGL: ["WEBGL_debug_renderer_info", "getParameter()", "readPixels()"],
+  blockWebGL: ["getContext('webgl')", "getContext('webgl2')"],
+  spoofAudioFingerprint: [
+    "getChannelData()",
+    "getFloatFrequencyData()",
+    "copyFromChannel()",
+  ],
+  blockAudioFingerprint: ["OfflineAudioContext", "getChannelData()"],
+  blockFontFingerprint: ["document.fonts", "fonts.check()", "fonts.load()"],
+  spoofSpeechSynthesis: ["speechSynthesis.getVoices()"],
+  blockSpeechSynthesis: ["speechSynthesis.getVoices()"],
+  spoofHardwareConcurrency: ["navigator.hardwareConcurrency"],
+  spoofDeviceMemory: ["navigator.deviceMemory"],
+  spoofMediaDevices: ["enumerateDevices()", "deviceId", "groupId"],
+  blockMediaDevices: ["enumerateDevices()"],
+  blockNetworkInfo: ["navigator.connection", "navigator.mozConnection"],
+  blockPermissionsEnum: ["navigator.permissions.query()"],
+  spoofStorageEstimate: ["navigator.storage.estimate()"],
+  blockGamepad: ["navigator.getGamepads()", "gamepadconnected"],
 };
 
 const BLOCKING_KEYS = new Set([
@@ -315,6 +344,8 @@ const BLOCKING_KEYS = new Set([
   "blockKnownTrackers",
   "blockWebRTC",
   "blockBattery",
+  "blockLinkPrefetch",
+  "stripTrackingParams",
   "blockClipboard",
   "blockSelection",
   "blockScrollTracking",
