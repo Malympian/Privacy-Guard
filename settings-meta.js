@@ -12,7 +12,7 @@ const SETTINGS_META = [
   {
     key: "blockKnownTrackers",
     label: "Block known tracker domains",
-    hint: "Domain-level block for known analytics, session-recording, and ad-tracking vendors.",
+    hint: "Domain-level block for ~70 known analytics, session-recording, and ad-tracking vendors — plus any subdomain that's named like a telemetry endpoint (e.g. analytics.*, pixel-*, telemetry.*), even on a site's own domain.",
   },
   {
     key: "blockWebRTC",
