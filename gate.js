@@ -79,7 +79,49 @@ function injectConfigAndGuard(config) {
   document.documentElement.appendChild(script);
 }
 
-function requestInject() {
+const PG_CACHE_PREFIX = "__pgConfigCache:";
+
+function pgCacheKey() {
+  return PG_CACHE_PREFIX + location.hostname;
+}
+
+function readCachedDecision() {
+  try {
+    const raw = localStorage.getItem(pgCacheKey());
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedDecision(response) {
+  try {
+    if (response?.inject && response.config) {
+      localStorage.setItem(
+        pgCacheKey(),
+        JSON.stringify({ inject: true, config: response.config }),
+      );
+    } else {
+      localStorage.removeItem(pgCacheKey());
+    }
+  } catch {}
+}
+
+function applyCachedConfigSynchronously() {
+  const cached = readCachedDecision();
+  if (cached?.inject && cached.config && document.documentElement) {
+    document.documentElement.dataset.privacyGuardConfig = JSON.stringify(
+      cached.config,
+    );
+    return true;
+  }
+  return false;
+}
+
+function requestInject(hadSyncCacheHit) {
   const hostname = location.hostname;
   if (!hostname) return;
 
@@ -87,20 +129,27 @@ function requestInject() {
     { type: "getInjectConfig", hostname },
     (response) => {
       if (chrome.runtime.lastError) return;
+
+      writeCachedDecision(response);
+
       if (!response?.inject) return;
+
+      if (hadSyncCacheHit) return;
 
       injectConfigAndGuard(response.config);
     },
   );
 }
 
+const __pgHadSyncCacheHit = applyCachedConfigSynchronously();
+
 if (document.documentElement) {
-  requestInject();
+  requestInject(__pgHadSyncCacheHit);
 } else {
   document.addEventListener(
     "readystatechange",
     () => {
-      if (document.documentElement) requestInject();
+      if (document.documentElement) requestInject(__pgHadSyncCacheHit);
     },
     { once: true },
   );
