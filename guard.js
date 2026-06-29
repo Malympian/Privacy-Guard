@@ -674,14 +674,23 @@
 
   if (features.blockBattery) {
     try {
+      const fakeBatteryManager = {
+        charging: true,
+        chargingTime: 0,
+        dischargingTime: Infinity,
+        level: 1,
+        addEventListener() {},
+        removeEventListener() {},
+        dispatchEvent() {
+          return false;
+        },
+        onchargingchange: null,
+        onchargingtimechange: null,
+        ondischargingtimechange: null,
+        onlevelchange: null,
+      };
       Object.defineProperty(navigator, "getBattery", {
-        value: () =>
-          Promise.reject(
-            new DOMException(
-              "Battery API blocked by Privacy Guard",
-              "NotAllowedError",
-            ),
-          ),
+        value: () => Promise.resolve(fakeBatteryManager),
         configurable: true,
         writable: true,
       });
@@ -1997,6 +2006,94 @@
         return 0;
       };
     } catch {}
+
+    try {
+      const _localToUTCGetters = [
+        ["getFullYear", "getUTCFullYear"],
+        ["getMonth", "getUTCMonth"],
+        ["getDate", "getUTCDate"],
+        ["getDay", "getUTCDay"],
+        ["getHours", "getUTCHours"],
+        ["getMinutes", "getUTCMinutes"],
+        ["getSeconds", "getUTCSeconds"],
+        ["getMilliseconds", "getUTCMilliseconds"],
+      ];
+      for (const [localName, utcName] of _localToUTCGetters) {
+        try {
+          const utcFn = Date.prototype[utcName];
+          Object.defineProperty(Date.prototype, localName, {
+            value: function (...args) {
+              return utcFn.apply(this, args);
+            },
+            configurable: true,
+            writable: true,
+          });
+        } catch {}
+      }
+
+      try {
+        Object.defineProperty(Date.prototype, "getYear", {
+          value: function () {
+            return this.getUTCFullYear() - 1900;
+          },
+          configurable: true,
+          writable: true,
+        });
+      } catch {}
+    } catch {}
+
+    try {
+      const _pad2 = (n) => String(Math.abs(n)).padStart(2, "0");
+      const _WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+      const _MONTHS = [
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+      ];
+
+      function pgDatePart(d) {
+        return `${_WEEKDAYS[d.getUTCDay()]} ${_MONTHS[d.getUTCMonth()]} ${_pad2(d.getUTCDate())} ${d.getUTCFullYear()}`;
+      }
+      function pgTimePart(d) {
+        return `${_pad2(d.getUTCHours())}:${_pad2(d.getUTCMinutes())}:${_pad2(d.getUTCSeconds())} GMT+0000 (Coordinated Universal Time)`;
+      }
+
+      Object.defineProperty(Date.prototype, "toString", {
+        value: function () {
+          if (isNaN(this.getTime())) return "Invalid Date";
+          return `${pgDatePart(this)} ${pgTimePart(this)}`;
+        },
+        configurable: true,
+        writable: true,
+      });
+      Object.defineProperty(Date.prototype, "toDateString", {
+        value: function () {
+          if (isNaN(this.getTime())) return "Invalid Date";
+          return pgDatePart(this);
+        },
+        configurable: true,
+        writable: true,
+      });
+      Object.defineProperty(Date.prototype, "toTimeString", {
+        value: function () {
+          if (isNaN(this.getTime())) return "Invalid Date";
+          return pgTimePart(this);
+        },
+        configurable: true,
+        writable: true,
+      });
+    } catch (e) {
+      console.warn("[privacy-guard] toString timezone patch failed:", e);
+    }
 
     try {
       const _toLS = Date.prototype.toLocaleString;
