@@ -3,15 +3,139 @@ importScripts("settings-meta.js", "icon-render.js");
 const DEFAULT_BLOCKED_PATTERNS = [
   "/quiz_submission_events",
   "/events",
-  "/analytics",
   "/error_reports",
   "/tracking",
-  "/telemetry",
-  "/biometric",
-  "/keylog",
-  "/behavior",
   "get_metrics",
+  "analytics",
+  "telemetry",
+  "biometric",
+  "keylog",
+  "behavior",
 ];
+
+const TRACKER_CATEGORIES = {
+  sessionRecording: {
+    label: "Session recording / heatmap",
+    domains: [
+      "hotjar.com",
+      "fullstory.com",
+      "logrocket.io",
+      "logrocket.com",
+      "mouseflow.com",
+      "inspectlet.com",
+      "crazyegg.com",
+      "luckyorange.com",
+      "smartlook.com",
+      "contentsquare.com",
+      "decibelinsight.net",
+      "clicktale.net",
+    ],
+  },
+  analytics: {
+    label: "Web / product analytics",
+    domains: [
+      "google-analytics.com",
+      "googletagmanager.com",
+      "analytics.google.com",
+      "heapanalytics.com",
+      "heap.io",
+      "amplitude.com",
+      "api.mixpanel.com",
+      "segment.io",
+      "segment.com",
+      "clarity.microsoft.com",
+      "quantserve.com",
+      "scorecardresearch.com",
+      "chartbeat.com",
+      "chartbeat.net",
+      "parsely.com",
+      "parse.ly",
+      "statcounter.com",
+      "histats.com",
+      "snowplowanalytics.com",
+      "cloudflareinsights.com",
+      "mc.yandex.ru",
+      "omtrdc.net",
+      "demdex.net",
+      "2o7.net",
+    ],
+  },
+  adTracking: {
+    label: "Ad tracking / programmatic",
+    domains: [
+      "doubleclick.net",
+      "adnxs.com",
+      "criteo.com",
+      "criteo.net",
+      "outbrain.com",
+      "taboola.com",
+      "pubmatic.com",
+      "rubiconproject.com",
+      "casalemedia.com",
+      "openx.net",
+      "adsrvr.org",
+      "moatads.com",
+      "bluekai.com",
+      "krxd.net",
+      "tiqcdn.com",
+      "connect.facebook.net",
+      "analytics.tiktok.com",
+      "ads-twitter.com",
+      "px.ads.linkedin.com",
+      "snap.licdn.com",
+      "ct.pinterest.com",
+      "bat.bing.com",
+    ],
+  },
+  errorReporting: {
+    label: "Crash / error reporting",
+    domains: ["sentry.io", "bugsnag.com", "newrelic.com", "nr-data.net"],
+  },
+  attribution: {
+    label: "Mobile attribution",
+    domains: ["branch.io", "appsflyer.com", "adjust.com"],
+  },
+};
+
+const KNOWN_TRACKER_DOMAINS = Object.values(TRACKER_CATEGORIES).flatMap(
+  (c) => c.domains,
+);
+
+function categoryForDomain(domain) {
+  for (const [key, cat] of Object.entries(TRACKER_CATEGORIES)) {
+    if (cat.domains.includes(domain)) return { key, label: cat.label };
+  }
+  return null;
+}
+
+// Hostname *labels* (the parts between dots) that are a strong signal of a
+// dedicated telemetry endpoint regardless of which company's domain they
+// live under — e.g. "pixel-config.reddit.com" or "ups.analytics.yahoo.com".
+// Kept intentionally short and high-precision: words like "track" or
+// "stats" are deliberately excluded because they collide with legitimate
+// functional subdomains (package tracking, public stats pages, etc).
+const TRACKER_HOSTNAME_HINTS = [
+  "analytics",
+  "telemetry",
+  "pixel",
+  "pixels",
+  "metric",
+  "metrics",
+  "beacon",
+  "biometric",
+  "keylog",
+];
+
+function hostnameLooksLikeTracker(hostname) {
+  const labels = String(hostname ?? "")
+    .toLowerCase()
+    .split(".");
+  return labels.some((label) =>
+    TRACKER_HOSTNAME_HINTS.some(
+      (word) => label === word || label.startsWith(word + "-"),
+    ),
+  );
+}
 
 const MAX_LOG = 40;
 
@@ -74,6 +198,18 @@ function getBlockedPatterns(sync) {
   return [...DEFAULT_BLOCKED_PATTERNS, ...custom];
 }
 
+function getKnownTrackerDomains(sync) {
+  const custom = (sync.blockedDomains ?? [])
+    .map((d) => d.trim().toLowerCase())
+    .filter(Boolean);
+  return [...KNOWN_TRACKER_DOMAINS, ...custom];
+}
+
+function domainMatch(hostname, domains) {
+  const h = String(hostname ?? "").toLowerCase();
+  return domains.find((d) => h === d || h.endsWith("." + d)) ?? null;
+}
+
 function getExceptions(sync) {
   return (sync.exceptions ?? []).map((p) => p.trim()).filter(Boolean);
 }
@@ -81,7 +217,7 @@ function getExceptions(sync) {
 function exceptionPatternFromUrl(rawUrl) {
   try {
     const u = new URL(rawUrl);
-    return u.origin + u.pathname;
+    return u.origin + u.pathname; // e.g. "https://example.com/events"
   } catch {
     return rawUrl;
   }
@@ -95,6 +231,7 @@ async function getInjectDecision(hostname, tabId) {
     siteOverrides: {},
     customPatterns: [],
     exceptions: [],
+    blockedDomains: [],
   });
 
   const session = await chrome.storage.session.get({
@@ -122,6 +259,8 @@ async function getInjectDecision(hostname, tabId) {
     features: mergeFeatures(sync.features, siteEntry),
     blockedPatterns: getBlockedPatterns(sync),
     exceptions: getExceptions(sync),
+    knownTrackerDomains: getKnownTrackerDomains(sync),
+    trackerHostnameHints: TRACKER_HOSTNAME_HINTS,
   };
 
   if (tabState?.mode === "active") {
@@ -297,9 +436,13 @@ async function recordObserve(tabId, detail) {
   const sync = await chrome.storage.sync.get({
     customPatterns: [],
     exceptions: [],
+    blockedDomains: [],
+    features: DEFAULT_FEATURES,
   });
+  const features = { ...DEFAULT_FEATURES, ...sync.features };
   const allPatterns = getBlockedPatterns(sync);
   const exceptions = getExceptions(sync);
+  const knownDomains = getKnownTrackerDomains(sync);
 
   const { tabDiscovered = {} } = await chrome.storage.session.get({
     tabDiscovered: {},
@@ -309,7 +452,27 @@ async function recordObserve(tabId, detail) {
   const url = detail.url;
   const prev = map[url] ?? null;
 
-  const matchedPatterns = allPatterns.filter((p) => url.includes(p));
+  const matchedPatterns = features.blockTrackingRequests
+    ? allPatterns.filter((p) => url.includes(p))
+    : [];
+
+  let matchedDomain = null;
+  let matchedDomainCategory = null;
+  let matchedViaHostnameHint = false;
+  if (features.blockKnownTrackers) {
+    let hostname = "";
+    try {
+      hostname = new URL(url).hostname;
+    } catch {}
+    const vendorDomain = domainMatch(hostname, knownDomains);
+    if (vendorDomain) {
+      matchedDomain = vendorDomain;
+      matchedDomainCategory = categoryForDomain(vendorDomain);
+    } else if (hostnameLooksLikeTracker(hostname)) {
+      matchedDomain = hostname;
+      matchedViaHostnameHint = true;
+    }
+  }
 
   const exceptionPattern = exceptionPatternFromUrl(url);
   const isExcepted = exceptions.some(
@@ -317,15 +480,22 @@ async function recordObserve(tabId, detail) {
   );
 
   const blocked =
-    !isExcepted && (matchedPatterns.length > 0 || !!detail.blocked);
+    !isExcepted &&
+    (matchedPatterns.length > 0 || !!matchedDomain || !!detail.blocked);
 
   map[url] = {
     url,
     hits: (prev?.hits ?? 0) + 1,
     via: detail.via ?? prev?.via ?? "",
     matchedPatterns,
+    matchedDomain,
+    matchedDomainCategory: matchedDomainCategory?.label ?? null,
+    matchedViaHostnameHint,
     decision: blocked ? "block" : "allow",
-    reason: matchedPatterns[0] ?? (detail.blocked ? "guard-blocked" : null),
+    reason:
+      matchedPatterns[0] ??
+      matchedDomain ??
+      (detail.blocked ? "guard-blocked" : null),
     blocked,
     isExcepted,
     firstSeen: prev?.firstSeen ?? Date.now(),
@@ -373,6 +543,7 @@ chrome.runtime.onInstalled.addListener(async () => {
     siteOverrides: null,
     customPatterns: null,
     exceptions: null,
+    blockedDomains: null,
   });
   const patch = {};
   if (sync.enabled === null) patch.enabled = true;
@@ -381,6 +552,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   if (sync.siteOverrides === null) patch.siteOverrides = {};
   if (sync.customPatterns === null) patch.customPatterns = [];
   if (sync.exceptions === null) patch.exceptions = [];
+  if (sync.blockedDomains === null) patch.blockedDomains = [];
   if (Object.keys(patch).length) await chrome.storage.sync.set(patch);
   await preloadStatusBitmaps();
   await refreshAllBadges();
@@ -519,6 +691,25 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     chrome.storage.sync.get({ exceptions: [] }).then((sync) => {
       sendResponse({ exceptions: sync.exceptions ?? [] });
     });
+    return true;
+  }
+
+  if (msg.type === "getTrackerMeta") {
+    chrome.storage.sync
+      .get({ customPatterns: [], blockedDomains: [] })
+      .then((sync) => {
+        sendResponse({
+          blockedPatterns: getBlockedPatterns(sync),
+          knownTrackerDomains: getKnownTrackerDomains(sync),
+          trackerHostnameHints: TRACKER_HOSTNAME_HINTS,
+          categories: Object.fromEntries(
+            Object.entries(TRACKER_CATEGORIES).map(([key, c]) => [
+              key,
+              { label: c.label, domains: c.domains },
+            ]),
+          ),
+        });
+      });
     return true;
   }
 
