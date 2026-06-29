@@ -38,27 +38,19 @@
   const exceptions = cfg.exceptions ?? [];
   const extraBlockedDomains = cfg.blockedDomains ?? [];
 
-  const KNOWN_TRACKER_DOMAINS = [
-    "hotjar.com",
-    "fullstory.com",
-    "logrocket.io",
-    "mouseflow.com",
-    "inspectlet.com",
-    "crazyegg.com",
-    "luckyorange.com",
-    "smartlook.com",
-    "contentsquare.com",
-    "heapanalytics.com",
-    "heap.io",
+  const KNOWN_TRACKER_DOMAINS = cfg.knownTrackerDomains ?? [];
+  const TRACKER_HOSTNAME_HINTS = cfg.trackerHostnameHints ?? [];
 
-    "google-analytics.com",
-    "googletagmanager.com",
-    "doubleclick.net",
-    "amplitude.com",
-    "api.mixpanel.com",
-    "segment.io",
-    "clarity.microsoft.com",
-  ];
+  function hostnameLooksLikeTracker(hostname) {
+    const labels = String(hostname ?? "")
+      .toLowerCase()
+      .split(".");
+    return labels.some((label) =>
+      TRACKER_HOSTNAME_HINTS.some(
+        (word) => label === word || label.startsWith(word + "-"),
+      ),
+    );
+  }
 
   function emitPgMessage(message) {
     message.id ??= `pg-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -95,7 +87,8 @@
         const h = new URL(s).hostname;
         const allDomains = [...KNOWN_TRACKER_DOMAINS, ...extraBlockedDomains];
         matchedDomain =
-          allDomains.find((d) => h === d || h.endsWith("." + d)) ?? null;
+          allDomains.find((d) => h === d || h.endsWith("." + d)) ??
+          (hostnameLooksLikeTracker(h) ? h : null);
       } catch {}
     }
 
@@ -127,6 +120,7 @@
         const h = new URL(s).hostname;
         const allDomains = [...KNOWN_TRACKER_DOMAINS, ...extraBlockedDomains];
         if (allDomains.some((d) => h === d || h.endsWith("." + d))) return true;
+        if (hostnameLooksLikeTracker(h)) return true;
       } catch {}
     }
 
@@ -1207,7 +1201,6 @@
     }
   }
 
-  // ── Canvas fingerprint (noise or full block) ──────────────────────────
   if (features.spoofCanvasNoise || features.blockCanvas) {
     const _toDataURL = HTMLCanvasElement.prototype.toDataURL;
     const _toBlob = HTMLCanvasElement.prototype.toBlob;
@@ -1239,8 +1232,6 @@
         console.warn("[privacy-guard] blockCanvas patch failed:", e);
       }
     } else {
-      // spoofCanvasNoise — flip LSB of ~5% of colour pixels in a throwaway copy;
-      // the original canvas is never modified.
       function noisePixels(data) {
         for (let i = 0; i < data.length; i += 4) {
           if (Math.random() < 0.05)
@@ -1315,7 +1306,6 @@
     }
   }
 
-  // ── WebGL fingerprint (spoof or full block) ────────────────────────────
   if (features.spoofWebGL || features.blockWebGL) {
     if (features.blockWebGL) {
       const _getCtx = HTMLCanvasElement.prototype.getContext;
@@ -1341,7 +1331,6 @@
         } catch (e) {}
       }
     } else {
-      // spoofWebGL — block renderer info extension, spoof GPU strings, noise readPixels
       for (const Ctor of [
         globalThis.WebGLRenderingContext,
         globalThis.WebGL2RenderingContext,
@@ -1360,8 +1349,8 @@
         try {
           const _getParam = proto.getParameter;
           proto.getParameter = function (param) {
-            if (param === 0x9245) return "Intel Inc."; // UNMASKED_VENDOR_WEBGL
-            if (param === 0x9246) return "Intel(R) Iris(R) Xe Graphics"; // UNMASKED_RENDERER_WEBGL
+            if (param === 0x9245) return "Intel Inc.";
+            if (param === 0x9246) return "Intel(R) Iris(R) Xe Graphics";
             return _getParam.call(this, param);
           };
         } catch (e) {}
@@ -1394,10 +1383,7 @@
     }
   }
 
-  // ── AudioContext fingerprint (noise or silent block) ───────────────────
   if (features.spoofAudioFingerprint || features.blockAudioFingerprint) {
-    // Only patch buffers that came from OfflineAudioContext.startRendering —
-    // regular playback buffers are untouched.
     const _offlineBuffers = new WeakSet();
 
     if (typeof OfflineAudioContext !== "undefined") {
@@ -1483,7 +1469,6 @@
     }
   }
 
-  // ── Font fingerprint ───────────────────────────────────────────────────
   if (features.blockFontFingerprint) {
     try {
       const fontStub = {
@@ -1518,7 +1503,6 @@
     }
   }
 
-  // ── Speech synthesis voices ────────────────────────────────────────────
   if (features.spoofSpeechSynthesis || features.blockSpeechSynthesis) {
     if (typeof SpeechSynthesis !== "undefined" && globalThis.speechSynthesis) {
       try {
@@ -1542,7 +1526,6 @@
     }
   }
 
-  // ── Hardware concurrency ───────────────────────────────────────────────
   if (features.spoofHardwareConcurrency) {
     try {
       Object.defineProperty(navigator, "hardwareConcurrency", {
@@ -1554,7 +1537,6 @@
     }
   }
 
-  // ── Device memory ──────────────────────────────────────────────────────
   if (features.spoofDeviceMemory) {
     try {
       Object.defineProperty(navigator, "deviceMemory", {
@@ -1566,7 +1548,6 @@
     }
   }
 
-  // ── Media device enumeration (anonymise or block) ──────────────────────
   if (features.spoofMediaDevices || features.blockMediaDevices) {
     const mdEnum = navigator.mediaDevices;
     if (mdEnum?.enumerateDevices && !mdEnum.enumerateDevices.__pgPatched) {
@@ -1597,7 +1578,6 @@
     }
   }
 
-  // ── Network Information API ────────────────────────────────────────────
   if (features.blockNetworkInfo) {
     for (const prop of ["connection", "mozConnection", "webkitConnection"]) {
       try {
@@ -1609,7 +1589,6 @@
     }
   }
 
-  // ── Permissions enumeration ────────────────────────────────────────────
   if (features.blockPermissionsEnum) {
     if (
       navigator.permissions?.query &&
@@ -1626,7 +1605,6 @@
     }
   }
 
-  // ── Storage estimate ───────────────────────────────────────────────────
   if (features.spoofStorageEstimate) {
     if (
       navigator.storage?.estimate &&
@@ -1643,7 +1621,6 @@
     }
   }
 
-  // ── Gamepad enumeration ────────────────────────────────────────────────
   if (features.blockGamepad) {
     try {
       Object.defineProperty(navigator, "getGamepads", {
@@ -1659,7 +1636,6 @@
     }
   }
 
-  // ── Link prefetch & prerender blocking ────────────────────────────────
   if (features.blockLinkPrefetch) {
     const PREFETCH_RELS = new Set(["prefetch", "prerender", "dns-prefetch"]);
 
@@ -1678,7 +1654,6 @@
       });
     }
 
-    // Remove any prefetch links already in the DOM at injection time
     document.querySelectorAll("link").forEach((link) => {
       const rel = (link.getAttribute("rel") ?? "").toLowerCase().trim();
       if (PREFETCH_RELS.has(rel)) link.remove();
@@ -1689,37 +1664,36 @@
     }).observe(document.documentElement, { childList: true, subtree: true });
   }
 
-  // ── Tracking URL parameter stripping ──────────────────────────────────
   if (features.stripTrackingParams) {
     const TRACKING_PARAMS = new Set([
       "gclid",
       "gclsrc",
       "dclid",
       "gbraid",
-      "wbraid", // Google Ads
+      "wbraid",
       "fbclid",
-      "igshid", // Meta
+      "igshid",
       "utm_source",
       "utm_medium",
-      "utm_campaign", // UTM
+      "utm_campaign",
       "utm_term",
       "utm_content",
       "utm_id",
       "utm_reader",
       "mc_eid",
-      "mc_cid", // Mailchimp
+      "mc_cid",
       "_hsenc",
       "_hsmi",
-      "hsCtaTracking", // HubSpot
-      "mkt_tok", // Marketo
-      "twclid", // Twitter/X
+      "hsCtaTracking",
+      "mkt_tok",
+      "twclid",
       "msclkid",
       "WT.mc_id",
-      "WT.srch", // Microsoft
+      "WT.srch",
       "trk",
-      "trkInfo", // LinkedIn
+      "trkInfo",
       "ncid",
-      "s_cid", // Adobe / Nielsen
+      "s_cid",
     ]);
 
     function stripTracking(url) {
@@ -1738,7 +1712,6 @@
       }
     }
 
-    // Clean the initial page URL without adding a history entry
     const cleanedHref = stripTracking(location.href);
     if (cleanedHref) {
       try {
@@ -1746,7 +1719,6 @@
       } catch (e) {}
     }
 
-    // Patch SPA navigation so tracking params don't accumulate in history
     try {
       const _push = history.pushState.bind(history);
       const _replace = history.replaceState.bind(history);
