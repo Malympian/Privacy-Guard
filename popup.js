@@ -125,6 +125,7 @@ async function readSync() {
     siteOverrides: {},
     customPatterns: [],
     exceptions: [],
+    blockedDomains: [],
   });
 }
 async function readSession() {
@@ -424,6 +425,99 @@ function computeRecommendations(items) {
     recs[key] = hit && meta.risk === "low" ? "recommended" : "optional";
   }
   return recs;
+}
+
+function getRegistrableHost(hostname) {
+  const labels = String(hostname ?? "")
+    .toLowerCase()
+    .split(".")
+    .filter(Boolean);
+  if (labels.length <= 2) return labels.join(".");
+  const last = labels[labels.length - 1];
+  const secondLast = labels[labels.length - 2];
+  const multiPartSuffix =
+    last.length === 2 &&
+    ["co", "com", "org", "gov", "net", "edu"].includes(secondLast);
+  return labels.slice(multiPartSuffix ? -3 : -2).join(".");
+}
+
+const CAUTION_URL_HINTS =
+  /session[_-]?(refresh|token|renew)|\bauth\b|\blogin\b|\bcheckout\b|\bpayment\b|\bcsrf\b|\bgraphql\b/i;
+
+function classifyDiscoveredItem(item) {
+  const url = item?.url || "";
+  let hostname = "";
+  try {
+    hostname = new URL(url).hostname.toLowerCase();
+  } catch {}
+
+  const isFirstParty =
+    !!currentHost &&
+    !!hostname &&
+    getRegistrableHost(hostname) === getRegistrableHost(currentHost);
+
+  if (item.matchedDomain && !item.matchedViaHostnameHint) {
+    return {
+      level: "recommended",
+      label: item.matchedDomainCategory || "Known tracker domain",
+      reason: item.matchedDomainCategory
+        ? `${item.matchedDomain} is a known ${item.matchedDomainCategory.toLowerCase()} vendor — a dedicated tracking service, not something the page depends on.`
+        : `${item.matchedDomain} matches a domain you've already chosen to block.`,
+    };
+  }
+  if (item.matchedViaHostnameHint) {
+    return {
+      level: "recommended",
+      label: "Dedicated telemetry subdomain",
+      reason: `The hostname "${hostname}" is named like a dedicated analytics/pixel/telemetry endpoint, even though it's served from ${isFirstParty ? "this site's own domain" : "a third-party domain"}. Endpoints named this specifically are essentially never load-bearing for page functionality.`,
+    };
+  }
+  if (item.via === "beacon") {
+    return {
+      level: "recommended",
+      label: "Fire-and-forget beacon",
+      reason:
+        "navigator.sendBeacon() is a one-way call the page never reads a response from — it's used almost exclusively for analytics, so blocking it can't break visible functionality.",
+    };
+  }
+
+  if (item.matchedPatterns?.length) {
+    if (CAUTION_URL_HINTS.test(url)) {
+      return {
+        level: "caution",
+        label: "Auth/session-shaped path",
+        reason: `Matches "${item.matchedPatterns[0]}", but the URL also looks like it could be a session, login, or checkout call. Blocking it might log you out or break the page rather than just stop tracking — check before adding a rule.`,
+      };
+    }
+    if (isFirstParty) {
+      return {
+        level: "optional",
+        label: "First-party + generic match",
+        reason: `Matches "${item.matchedPatterns[0]}", but it's a first-party call to this site's own domain. Usually still safe to block, but first-party "events"/"metrics"-style endpoints occasionally carry real product features (live feeds, feature flags) alongside telemetry — worth a quick look.`,
+      };
+    }
+    return {
+      level: "recommended",
+      label: "Third-party tracking call",
+      reason: `Third-party request matching "${item.matchedPatterns[0]}" — third-party calls with tracking-style naming are almost always pure telemetry.`,
+    };
+  }
+
+  if (CAUTION_URL_HINTS.test(url)) {
+    return {
+      level: "caution",
+      label: "Looks functional",
+      reason:
+        "Flagged by the broad scan, but the URL contains auth/session/checkout-style wording. This may be something the site needs to work correctly rather than pure tracking.",
+    };
+  }
+
+  return {
+    level: "optional",
+    label: "Unclear",
+    reason:
+      "Flagged by the general tracking-keyword scan, but it doesn't match a known vendor, a telemetry-named subdomain, or a confident pattern. Skim the URL before deciding.",
+  };
 }
 
 function getFeaturesForEditing(sync) {
@@ -774,9 +868,12 @@ async function syncObservedQueue() {
   } catch {}
 }
 
-function patternFromUrl(rawUrl) {
+function patternFromUrl(rawUrl, recLevel) {
   try {
-    return new URL(rawUrl).pathname || rawUrl;
+    const u = new URL(rawUrl);
+
+    if (recLevel === "recommended" && u.hostname) return u.hostname;
+    return u.pathname || rawUrl;
   } catch {
     return rawUrl;
   }
@@ -854,10 +951,14 @@ async function renderDiscover() {
 
     urlRow.append(badge, urlText);
 
-    if (item.matchedPatterns?.length) {
+    const allTags = [
+      ...(item.matchedPatterns ?? []),
+      ...(item.matchedDomain ? [item.matchedDomain] : []),
+    ];
+    if (allTags.length) {
       const tagRow = document.createElement("div");
       tagRow.className = "disc-tags";
-      for (const p of item.matchedPatterns) {
+      for (const p of allTags) {
         const tag = document.createElement("span");
         tag.className = "event-tag disc-blocked-tag";
         tag.textContent = p;
@@ -867,6 +968,19 @@ async function renderDiscover() {
     } else {
       body.append(urlRow);
     }
+
+    const rec = classifyDiscoveredItem(item);
+    const recRow = document.createElement("div");
+    recRow.className = "disc-rec-row";
+    const recDot = document.createElement("span");
+    recDot.className = `rec-dot rec-${rec.level}`;
+    recDot.title = rec.reason;
+    const recLabel = document.createElement("span");
+    recLabel.className = "disc-rec-text";
+    recLabel.textContent = rec.label;
+    recLabel.title = rec.reason;
+    recRow.append(recDot, recLabel);
+    body.append(recRow);
 
     const meta = document.createElement("div");
     meta.className = "disc-meta";
@@ -951,7 +1065,7 @@ async function renderDiscover() {
 
       const cb = document.createElement("input");
       cb.type = "checkbox";
-      cb.dataset.pattern = patternFromUrl(item.url);
+      cb.dataset.pattern = patternFromUrl(item.url, rec.level);
       cb.dataset.url = item.url;
 
       wrapper.append(cb, document.createTextNode(" Add to block rules"));
@@ -1229,6 +1343,17 @@ document.getElementById("scan-tab").addEventListener("click", async () => {
       world: "MAIN",
     });
     await new Promise((resolve) => setTimeout(resolve, 250));
+
+    let fullProtectionActive = false;
+    try {
+      const [{ result } = {}] = await chrome.scripting.executeScript({
+        target: { tabId: currentTabId },
+        world: "MAIN",
+        func: () => !!globalThis.__privacyGuardInstalled,
+      });
+      fullProtectionActive = !!result;
+    } catch {}
+
     const ready = await sendBg({
       type: "getObserveReady",
       tabId: currentTabId,
@@ -1237,15 +1362,23 @@ document.getElementById("scan-tab").addEventListener("click", async () => {
       type: "getDiscovered",
       tabId: currentTabId,
     });
-    if (ready?.at >= startedAt) {
-      discoverStatEl.textContent = "Watching — event bridge is active.";
+
+    if (!fullProtectionActive) {
+      discoverStatEl.textContent =
+        "⚠ Watching in basic mode — full protection hasn't loaded on this tab yet, so results below may not reflect your settings. Reload the tab, then Start Watching again.";
+      discoverStatEl.className = "scan-msg err";
+    } else if (ready?.at >= startedAt) {
+      discoverStatEl.textContent =
+        "Watching — full protection active, results reflect your settings.";
+      discoverStatEl.className = "scan-msg ok";
     } else if (items.length) {
       discoverStatEl.textContent = "Watching — observed URLs captured.";
+      discoverStatEl.className = "scan-msg ok";
     } else {
       discoverStatEl.textContent =
         "Watcher injected — interact with the page or reload it.";
+      discoverStatEl.className = "scan-msg ok";
     }
-    discoverStatEl.className = "scan-msg ok";
   } catch (err) {
     console.error(err);
     discoverStatEl.textContent = "✗ Could not inject watcher — restricted tab.";
