@@ -1207,6 +1207,568 @@
     }
   }
 
+  // ── Canvas fingerprint (noise or full block) ──────────────────────────
+  if (features.spoofCanvasNoise || features.blockCanvas) {
+    const _toDataURL = HTMLCanvasElement.prototype.toDataURL;
+    const _toBlob = HTMLCanvasElement.prototype.toBlob;
+    const _ctx2dGetImageData = CanvasRenderingContext2D.prototype.getImageData;
+
+    if (features.blockCanvas) {
+      try {
+        HTMLCanvasElement.prototype.toDataURL = function (...args) {
+          const blank = document.createElement("canvas");
+          blank.width = Math.max(1, this.width);
+          blank.height = Math.max(1, this.height);
+          return _toDataURL.call(blank, ...args);
+        };
+        HTMLCanvasElement.prototype.toBlob = function (callback, ...args) {
+          const blank = document.createElement("canvas");
+          blank.width = Math.max(1, this.width);
+          blank.height = Math.max(1, this.height);
+          _toBlob.call(blank, callback, ...args);
+        };
+        CanvasRenderingContext2D.prototype.getImageData = function (
+          sx,
+          sy,
+          sw,
+          sh,
+        ) {
+          return new ImageData(Math.max(1, sw | 0), Math.max(1, sh | 0));
+        };
+      } catch (e) {
+        console.warn("[privacy-guard] blockCanvas patch failed:", e);
+      }
+    } else {
+      // spoofCanvasNoise — flip LSB of ~5% of colour pixels in a throwaway copy;
+      // the original canvas is never modified.
+      function noisePixels(data) {
+        for (let i = 0; i < data.length; i += 4) {
+          if (Math.random() < 0.05)
+            data[i + Math.floor(Math.random() * 3)] ^= 1;
+        }
+      }
+
+      try {
+        CanvasRenderingContext2D.prototype.getImageData = function (
+          sx,
+          sy,
+          sw,
+          sh,
+          ...rest
+        ) {
+          const id = _ctx2dGetImageData.call(this, sx, sy, sw, sh, ...rest);
+          noisePixels(id.data);
+          return id;
+        };
+
+        HTMLCanvasElement.prototype.toDataURL = function (...args) {
+          try {
+            const tmp = document.createElement("canvas");
+            tmp.width = Math.max(1, this.width);
+            tmp.height = Math.max(1, this.height);
+            const tmpCtx = tmp.getContext("2d");
+            if (!tmpCtx) return _toDataURL.apply(this, args);
+            tmpCtx.drawImage(this, 0, 0);
+            const id = _ctx2dGetImageData.call(
+              tmpCtx,
+              0,
+              0,
+              tmp.width,
+              tmp.height,
+            );
+            noisePixels(id.data);
+            tmpCtx.putImageData(id, 0, 0);
+            return _toDataURL.apply(tmp, args);
+          } catch {
+            return _toDataURL.apply(this, args);
+          }
+        };
+
+        HTMLCanvasElement.prototype.toBlob = function (callback, ...args) {
+          try {
+            const tmp = document.createElement("canvas");
+            tmp.width = Math.max(1, this.width);
+            tmp.height = Math.max(1, this.height);
+            const tmpCtx = tmp.getContext("2d");
+            if (!tmpCtx) {
+              _toBlob.call(this, callback, ...args);
+              return;
+            }
+            tmpCtx.drawImage(this, 0, 0);
+            const id = _ctx2dGetImageData.call(
+              tmpCtx,
+              0,
+              0,
+              tmp.width,
+              tmp.height,
+            );
+            noisePixels(id.data);
+            tmpCtx.putImageData(id, 0, 0);
+            _toBlob.call(tmp, callback, ...args);
+          } catch {
+            _toBlob.call(this, callback, ...args);
+          }
+        };
+      } catch (e) {
+        console.warn("[privacy-guard] spoofCanvasNoise patch failed:", e);
+      }
+    }
+  }
+
+  // ── WebGL fingerprint (spoof or full block) ────────────────────────────
+  if (features.spoofWebGL || features.blockWebGL) {
+    if (features.blockWebGL) {
+      const _getCtx = HTMLCanvasElement.prototype.getContext;
+      try {
+        HTMLCanvasElement.prototype.getContext = function (type, ...args) {
+          const t = String(type).toLowerCase();
+          if (t === "webgl" || t === "webgl2" || t === "experimental-webgl")
+            return null;
+          return _getCtx.call(this, type, ...args);
+        };
+      } catch (e) {
+        console.warn("[privacy-guard] blockWebGL canvas patch failed:", e);
+      }
+      if (typeof OffscreenCanvas !== "undefined") {
+        const _ocGetCtx = OffscreenCanvas.prototype.getContext;
+        try {
+          OffscreenCanvas.prototype.getContext = function (type, ...args) {
+            const t = String(type).toLowerCase();
+            if (t === "webgl" || t === "webgl2" || t === "experimental-webgl")
+              return null;
+            return _ocGetCtx.call(this, type, ...args);
+          };
+        } catch (e) {}
+      }
+    } else {
+      // spoofWebGL — block renderer info extension, spoof GPU strings, noise readPixels
+      for (const Ctor of [
+        globalThis.WebGLRenderingContext,
+        globalThis.WebGL2RenderingContext,
+      ]) {
+        if (!Ctor?.prototype) continue;
+        const proto = Ctor.prototype;
+
+        try {
+          const _getExt = proto.getExtension;
+          proto.getExtension = function (name) {
+            if (name === "WEBGL_debug_renderer_info") return null;
+            return _getExt.call(this, name);
+          };
+        } catch (e) {}
+
+        try {
+          const _getParam = proto.getParameter;
+          proto.getParameter = function (param) {
+            if (param === 0x9245) return "Intel Inc."; // UNMASKED_VENDOR_WEBGL
+            if (param === 0x9246) return "Intel(R) Iris(R) Xe Graphics"; // UNMASKED_RENDERER_WEBGL
+            return _getParam.call(this, param);
+          };
+        } catch (e) {}
+
+        try {
+          const _readPx = proto.readPixels;
+          proto.readPixels = function (
+            x,
+            y,
+            w,
+            h,
+            format,
+            type,
+            pixels,
+            ...rest
+          ) {
+            _readPx.call(this, x, y, w, h, format, type, pixels, ...rest);
+            if (
+              pixels instanceof Uint8Array ||
+              pixels instanceof Uint8ClampedArray
+            ) {
+              for (let i = 0; i < pixels.length; i += 4) {
+                if (Math.random() < 0.05)
+                  pixels[i + Math.floor(Math.random() * 3)] ^= 1;
+              }
+            }
+          };
+        } catch (e) {}
+      }
+    }
+  }
+
+  // ── AudioContext fingerprint (noise or silent block) ───────────────────
+  if (features.spoofAudioFingerprint || features.blockAudioFingerprint) {
+    // Only patch buffers that came from OfflineAudioContext.startRendering —
+    // regular playback buffers are untouched.
+    const _offlineBuffers = new WeakSet();
+
+    if (typeof OfflineAudioContext !== "undefined") {
+      try {
+        const _startRendering = OfflineAudioContext.prototype.startRendering;
+        OfflineAudioContext.prototype.startRendering = async function () {
+          const buffer = await _startRendering.call(this);
+          _offlineBuffers.add(buffer);
+          return buffer;
+        };
+      } catch (e) {}
+    }
+
+    const AUDIO_NOISE = 1e-7;
+    function noiseFloat32(arr) {
+      for (let i = 0; i < arr.length; i++)
+        arr[i] += (Math.random() - 0.5) * AUDIO_NOISE;
+    }
+
+    if (typeof AudioBuffer !== "undefined") {
+      try {
+        const _getChannelData = AudioBuffer.prototype.getChannelData;
+        const _copyFromChannel = AudioBuffer.prototype.copyFromChannel;
+
+        AudioBuffer.prototype.getChannelData = function (channel) {
+          const data = _getChannelData.call(this, channel);
+          if (!_offlineBuffers.has(this)) return data;
+          if (features.blockAudioFingerprint)
+            return new Float32Array(this.length);
+          const copy = new Float32Array(data);
+          noiseFloat32(copy);
+          return copy;
+        };
+
+        AudioBuffer.prototype.copyFromChannel = function (
+          destination,
+          channelNumber,
+          startInChannel,
+        ) {
+          if (features.blockAudioFingerprint && _offlineBuffers.has(this)) {
+            if (destination) destination.fill(0);
+            return;
+          }
+          _copyFromChannel.call(
+            this,
+            destination,
+            channelNumber,
+            startInChannel,
+          );
+          if (_offlineBuffers.has(this) && destination)
+            noiseFloat32(destination);
+        };
+      } catch (e) {
+        console.warn("[privacy-guard] AudioBuffer patch failed:", e);
+      }
+    }
+
+    if (typeof AnalyserNode !== "undefined") {
+      try {
+        const _getFloatFreq = AnalyserNode.prototype.getFloatFrequencyData;
+        const _getFloatTime = AnalyserNode.prototype.getFloatTimeDomainData;
+
+        AnalyserNode.prototype.getFloatFrequencyData = function (array) {
+          if (features.blockAudioFingerprint) {
+            if (array) array.fill(-Infinity);
+            return;
+          }
+          _getFloatFreq.call(this, array);
+          if (array) noiseFloat32(array);
+        };
+
+        AnalyserNode.prototype.getFloatTimeDomainData = function (array) {
+          if (features.blockAudioFingerprint) {
+            if (array) array.fill(0);
+            return;
+          }
+          _getFloatTime.call(this, array);
+          if (array) noiseFloat32(array);
+        };
+      } catch (e) {
+        console.warn("[privacy-guard] AnalyserNode patch failed:", e);
+      }
+    }
+  }
+
+  // ── Font fingerprint ───────────────────────────────────────────────────
+  if (features.blockFontFingerprint) {
+    try {
+      const fontStub = {
+        check: () => false,
+        load: () => Promise.resolve([]),
+        get ready() {
+          return Promise.resolve(fontStub);
+        },
+        status: "loaded",
+        size: 0,
+        forEach: () => {},
+        has: () => false,
+        [Symbol.iterator]: function* () {},
+        keys: function* () {},
+        values: function* () {},
+        entries: function* () {},
+        add() {
+          return fontStub;
+        },
+        delete: () => false,
+        clear: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => false,
+      };
+      Object.defineProperty(document, "fonts", {
+        get: () => fontStub,
+        configurable: true,
+      });
+    } catch (e) {
+      console.warn("[privacy-guard] fonts patch failed:", e);
+    }
+  }
+
+  // ── Speech synthesis voices ────────────────────────────────────────────
+  if (features.spoofSpeechSynthesis || features.blockSpeechSynthesis) {
+    if (typeof SpeechSynthesis !== "undefined" && globalThis.speechSynthesis) {
+      try {
+        const SPOOF_VOICES = features.blockSpeechSynthesis
+          ? []
+          : [
+              {
+                name: "Google US English",
+                lang: "en-US",
+                localService: false,
+                default: true,
+                voiceURI: "Google US English",
+              },
+            ];
+        SpeechSynthesis.prototype.getVoices = function () {
+          return SPOOF_VOICES;
+        };
+      } catch (e) {
+        console.warn("[privacy-guard] speechSynthesis patch failed:", e);
+      }
+    }
+  }
+
+  // ── Hardware concurrency ───────────────────────────────────────────────
+  if (features.spoofHardwareConcurrency) {
+    try {
+      Object.defineProperty(navigator, "hardwareConcurrency", {
+        get: () => 4,
+        configurable: true,
+      });
+    } catch (e) {
+      console.warn("[privacy-guard] hardwareConcurrency patch failed:", e);
+    }
+  }
+
+  // ── Device memory ──────────────────────────────────────────────────────
+  if (features.spoofDeviceMemory) {
+    try {
+      Object.defineProperty(navigator, "deviceMemory", {
+        get: () => 8,
+        configurable: true,
+      });
+    } catch (e) {
+      console.warn("[privacy-guard] deviceMemory patch failed:", e);
+    }
+  }
+
+  // ── Media device enumeration (anonymise or block) ──────────────────────
+  if (features.spoofMediaDevices || features.blockMediaDevices) {
+    const mdEnum = navigator.mediaDevices;
+    if (mdEnum?.enumerateDevices && !mdEnum.enumerateDevices.__pgPatched) {
+      try {
+        const _enumDevices = mdEnum.enumerateDevices.bind(mdEnum);
+        mdEnum.enumerateDevices = async function () {
+          if (features.blockMediaDevices) return [];
+          const devices = await _enumDevices();
+          return devices.map((d) => ({
+            kind: d.kind,
+            label: "",
+            deviceId: d.deviceId === "default" ? "default" : "pg-anonymized",
+            groupId: "",
+            toJSON() {
+              return {
+                kind: this.kind,
+                label: "",
+                deviceId: this.deviceId,
+                groupId: "",
+              };
+            },
+          }));
+        };
+        mdEnum.enumerateDevices.__pgPatched = true;
+      } catch (e) {
+        console.warn("[privacy-guard] enumerateDevices patch failed:", e);
+      }
+    }
+  }
+
+  // ── Network Information API ────────────────────────────────────────────
+  if (features.blockNetworkInfo) {
+    for (const prop of ["connection", "mozConnection", "webkitConnection"]) {
+      try {
+        Object.defineProperty(navigator, prop, {
+          get: () => undefined,
+          configurable: true,
+        });
+      } catch (e) {}
+    }
+  }
+
+  // ── Permissions enumeration ────────────────────────────────────────────
+  if (features.blockPermissionsEnum) {
+    if (
+      navigator.permissions?.query &&
+      !navigator.permissions.query.__pgPatched
+    ) {
+      try {
+        navigator.permissions.query = async function () {
+          return { state: "prompt", onchange: null };
+        };
+        navigator.permissions.query.__pgPatched = true;
+      } catch (e) {
+        console.warn("[privacy-guard] permissions.query patch failed:", e);
+      }
+    }
+  }
+
+  // ── Storage estimate ───────────────────────────────────────────────────
+  if (features.spoofStorageEstimate) {
+    if (
+      navigator.storage?.estimate &&
+      !navigator.storage.estimate.__pgPatched
+    ) {
+      try {
+        navigator.storage.estimate = async function () {
+          return { quota: 107_374_182_400, usage: 12_345_678 };
+        };
+        navigator.storage.estimate.__pgPatched = true;
+      } catch (e) {
+        console.warn("[privacy-guard] storage.estimate patch failed:", e);
+      }
+    }
+  }
+
+  // ── Gamepad enumeration ────────────────────────────────────────────────
+  if (features.blockGamepad) {
+    try {
+      Object.defineProperty(navigator, "getGamepads", {
+        value: () => [],
+        configurable: true,
+        writable: true,
+      });
+    } catch (e) {}
+    for (const type of ["gamepadconnected", "gamepaddisconnected"]) {
+      window.addEventListener(type, (e) => e.stopImmediatePropagation(), {
+        capture: true,
+      });
+    }
+  }
+
+  // ── Link prefetch & prerender blocking ────────────────────────────────
+  if (features.blockLinkPrefetch) {
+    const PREFETCH_RELS = new Set(["prefetch", "prerender", "dns-prefetch"]);
+
+    function dropPrefetchLinks(node) {
+      if (node.nodeType !== 1) return;
+      if (node.tagName === "LINK") {
+        const rel = (node.getAttribute("rel") ?? "").toLowerCase().trim();
+        if (PREFETCH_RELS.has(rel)) {
+          node.remove();
+          return;
+        }
+      }
+      node.querySelectorAll?.("link").forEach((link) => {
+        const rel = (link.getAttribute("rel") ?? "").toLowerCase().trim();
+        if (PREFETCH_RELS.has(rel)) link.remove();
+      });
+    }
+
+    // Remove any prefetch links already in the DOM at injection time
+    document.querySelectorAll("link").forEach((link) => {
+      const rel = (link.getAttribute("rel") ?? "").toLowerCase().trim();
+      if (PREFETCH_RELS.has(rel)) link.remove();
+    });
+
+    new MutationObserver((mutations) => {
+      for (const m of mutations) m.addedNodes.forEach(dropPrefetchLinks);
+    }).observe(document.documentElement, { childList: true, subtree: true });
+  }
+
+  // ── Tracking URL parameter stripping ──────────────────────────────────
+  if (features.stripTrackingParams) {
+    const TRACKING_PARAMS = new Set([
+      "gclid",
+      "gclsrc",
+      "dclid",
+      "gbraid",
+      "wbraid", // Google Ads
+      "fbclid",
+      "igshid", // Meta
+      "utm_source",
+      "utm_medium",
+      "utm_campaign", // UTM
+      "utm_term",
+      "utm_content",
+      "utm_id",
+      "utm_reader",
+      "mc_eid",
+      "mc_cid", // Mailchimp
+      "_hsenc",
+      "_hsmi",
+      "hsCtaTracking", // HubSpot
+      "mkt_tok", // Marketo
+      "twclid", // Twitter/X
+      "msclkid",
+      "WT.mc_id",
+      "WT.srch", // Microsoft
+      "trk",
+      "trkInfo", // LinkedIn
+      "ncid",
+      "s_cid", // Adobe / Nielsen
+    ]);
+
+    function stripTracking(url) {
+      try {
+        const u = new URL(url, location.href);
+        let changed = false;
+        for (const p of TRACKING_PARAMS) {
+          if (u.searchParams.has(p)) {
+            u.searchParams.delete(p);
+            changed = true;
+          }
+        }
+        return changed ? u.toString() : null;
+      } catch {
+        return null;
+      }
+    }
+
+    // Clean the initial page URL without adding a history entry
+    const cleanedHref = stripTracking(location.href);
+    if (cleanedHref) {
+      try {
+        history.replaceState(history.state, "", cleanedHref);
+      } catch (e) {}
+    }
+
+    // Patch SPA navigation so tracking params don't accumulate in history
+    try {
+      const _push = history.pushState.bind(history);
+      const _replace = history.replaceState.bind(history);
+      history.pushState = function (state, title, url) {
+        return _push(
+          state,
+          title,
+          url != null ? (stripTracking(String(url)) ?? url) : url,
+        );
+      };
+      history.replaceState = function (state, title, url) {
+        return _replace(
+          state,
+          title,
+          url != null ? (stripTracking(String(url)) ?? url) : url,
+        );
+      };
+    } catch (e) {
+      console.warn("[privacy-guard] history strip patch failed:", e);
+    }
+  }
+
   const active = Object.entries(features)
     .filter(([, v]) => v)
     .map(([k]) => k);
