@@ -5,26 +5,35 @@
     console.info("[privacy-guard] already installed — skipping re-patch");
     return;
   }
-  globalThis.__privacyGuardInstalled = true;
 
   function readConfig() {
-    const raw = document.currentScript?.dataset?.privacyGuardConfig;
-    if (raw) {
+    const fromScript = document.currentScript?.dataset?.privacyGuardConfig;
+    if (fromScript) {
       try {
-        return JSON.parse(raw);
+        return JSON.parse(fromScript);
       } catch (err) {
         console.warn("[privacy-guard] invalid config found — aborting", err);
         return null;
       }
     }
-    return globalThis.__PRIVACY_GUARD_CONFIG__;
+
+    const fromDom = document.documentElement?.dataset?.privacyGuardConfig;
+    if (fromDom) {
+      try {
+        return JSON.parse(fromDom);
+      } catch (err) {
+        console.warn("[privacy-guard] invalid cached config — ignoring", err);
+        return null;
+      }
+    }
+    return globalThis.__PRIVACY_GUARD_CONFIG__ ?? null;
   }
 
   const cfg = readConfig();
   if (!cfg) {
-    console.warn("[privacy-guard] no config found — aborting");
     return;
   }
+  globalThis.__privacyGuardInstalled = true;
   globalThis.__privacyGuardObservesRequests = true;
 
   const features = cfg.features ?? {};
