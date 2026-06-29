@@ -104,9 +104,19 @@ const SETTINGS_META = [
     hint: "Snaps screen.width/height and window.outerWidth/Height to the nearest common resolution bucket, preventing display fingerprinting.",
   },
   {
+    key: "spoofDevicePixelRatio",
+    label: "Spoof device pixel ratio",
+    hint: "Reports window.devicePixelRatio as 1 instead of the real value (2 on Retina/HiDPI displays). The pixel ratio combined with screen dimensions reliably identifies display class and narrows down device models.",
+  },
+  {
     key: "spoofScrollDepth",
     label: "Spoof scroll depth & position",
     hint: "Returns 0 for window.scrollY / scrollX and document.documentElement.scrollTop, masking scroll position from page scripts.",
+  },
+  {
+    key: "spoofTimezone",
+    label: "Spoof timezone as UTC",
+    hint: "Forces Intl.DateTimeFormat to resolve as UTC and makes Date.prototype.getTimezoneOffset() return 0, hiding your local timezone. Also patches toLocaleString/toLocaleDateString/toLocaleTimeString to use UTC. Timezone is one of the most reliable single-signal identifiers for a user's physical location.",
   },
   {
     key: "spoofPerformanceTiming",
@@ -203,7 +213,6 @@ const SETTINGS_META = [
     hint: "Drops all scroll, wheel, and scrollend listeners registered by page scripts. Note: may affect scroll-dependent UI (infinite loaders, sticky headers).",
   },
 
-  // ── Fingerprinting surface ──────────────────────────────────────────────
   {
     key: "spoofCanvasNoise",
     label: "Add noise to canvas reads",
@@ -293,6 +302,16 @@ const SETTINGS_META = [
     key: "blockGamepad",
     label: "Block gamepad enumeration",
     hint: "navigator.getGamepads() returns an empty array and gamepadconnected/gamepaddisconnected events are suppressed. Connected controller models and their axis/button counts are a stable fingerprint signal.",
+  },
+  {
+    key: "spoofNavigatorPlatform",
+    label: "Spoof OS platform & browser vendor",
+    hint: "Returns 'Win32' for navigator.platform, 'Google Inc.' for navigator.vendor, and generic Windows/Chrome values for the User-Agent Client Hints JS API (navigator.userAgentData). All three expose your real OS and hardware class to page scripts — separate from the HTTP User-Agent header.",
+  },
+  {
+    key: "spoofLanguage",
+    label: "Spoof browser language",
+    hint: "Reports navigator.language as 'en-US' and navigator.languages as ['en-US', 'en'] regardless of your actual locale configuration. The full installed language list is a stable fingerprint that can also reveal your nationality or region.",
   },
 ];
 
