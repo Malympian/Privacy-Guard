@@ -1126,7 +1126,7 @@
         display: none !important;
       }
 
-
+      .rec-dot {
         display: inline-block;
         width: 8px;
         height: 8px;
@@ -1142,15 +1142,21 @@
       }
       .rec-dot.rec-recommended {
         background: var(--green);
-        box-shadow: 0 0 0 2.5px var(--green-bg), 0 0 0 3.5px var(--green-border);
+        box-shadow:
+          0 0 0 2.5px var(--green-bg),
+          0 0 0 3.5px var(--green-border);
       }
       .rec-dot.rec-optional {
         background: #f59e0b;
-        box-shadow: 0 0 0 2.5px var(--yellow-bg), 0 0 0 3.5px var(--yellow-border);
+        box-shadow:
+          0 0 0 2.5px var(--yellow-bg),
+          0 0 0 3.5px var(--yellow-border);
       }
       .rec-dot.rec-caution {
         background: var(--red);
-        box-shadow: 0 0 0 2.5px var(--red-bg), 0 0 0 3.5px var(--red-border);
+        box-shadow:
+          0 0 0 2.5px var(--red-bg),
+          0 0 0 3.5px var(--red-border);
       }
 
       .rec-legend {
@@ -1179,6 +1185,23 @@
       }
       .rec-legend .rec-dot:hover {
         transform: none;
+      }
+
+      .disc-rec-row {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        margin-top: 3px;
+      }
+      .disc-rec-row .rec-dot {
+        margin-left: 0;
+        margin-top: 0;
+        flex-shrink: 0;
+      }
+      .disc-rec-text {
+        font-size: 9.5px;
+        color: var(--muted);
+        cursor: help;
       }
     </style>
   </head>
@@ -1521,10 +1544,24 @@
             </div>
             <div class="card-body">
               <p class="note-box"
-                >Each row is one full URL. <strong>BLOCKED</strong> = already
-                blocked by a rule. <strong>ALLOWED</strong> = not blocked —
-                check the box and hit "Block Selected" to add a rule.</p
+                >Each row is one full URL. <strong>BLOCKED</strong> = matches
+                one of your current block rules. <strong>ALLOWED</strong> =
+                doesn't match a rule yet — check the box and hit "Block
+                Selected" to add one.</p
               >
+              <div class="rec-legend">
+                <div class="rec-legend-item"
+                  ><span class="rec-dot rec-recommended"></span>Safe to
+                  block</div
+                >
+                <div class="rec-legend-item"
+                  ><span class="rec-dot rec-optional"></span>Use judgment</div
+                >
+                <div class="rec-legend-item"
+                  ><span class="rec-dot rec-caution"></span>May be
+                  functional</div
+                >
+              </div>
               <p id="discover-status" class="scan-msg"></p>
               <div class="btn-row" style="margin-top: 0; margin-bottom: 6px">
                 <button class="btn primary" id="scan-tab"
