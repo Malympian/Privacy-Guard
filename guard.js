@@ -1341,16 +1341,31 @@
         try {
           const _getExt = proto.getExtension;
           proto.getExtension = function (name) {
-            if (name === "WEBGL_debug_renderer_info") return null;
+            if (name === "WEBGL_debug_renderer_info") {
+              return {
+                UNMASKED_VENDOR_WEBGL: 0x9245,
+                UNMASKED_RENDERER_WEBGL: 0x9246,
+              };
+            }
             return _getExt.call(this, name);
+          };
+        } catch (e) {}
+
+        try {
+          const _getSuppExt = proto.getSupportedExtensions;
+          proto.getSupportedExtensions = function () {
+            const list = _getSuppExt.call(this);
+            if (!Array.isArray(list)) return list;
+            return list.filter((e) => e !== "WEBGL_debug_renderer_info");
           };
         } catch (e) {}
 
         try {
           const _getParam = proto.getParameter;
           proto.getParameter = function (param) {
-            if (param === 0x9245) return "Intel Inc.";
-            if (param === 0x9246) return "Intel(R) Iris(R) Xe Graphics";
+            if (param === 0x9245) return "Google Inc.";
+            if (param === 0x9246)
+              return "ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0, D3D11)";
             return _getParam.call(this, param);
           };
         } catch (e) {}
@@ -1501,6 +1516,66 @@
     } catch (e) {
       console.warn("[privacy-guard] fonts patch failed:", e);
     }
+
+    try {
+      const _getBCR = Element.prototype.getBoundingClientRect;
+      Element.prototype.getBoundingClientRect = function () {
+        const r = _getBCR.call(this);
+        const n = (Math.random() - 0.5) * 0.5;
+        return {
+          top: r.top + n,
+          left: r.left + n,
+          bottom: r.bottom + n,
+          right: r.right + n,
+          width: r.width + n,
+          height: r.height + n,
+          x: r.x + n,
+          y: r.y + n,
+          toJSON() {
+            return {
+              top: this.top,
+              left: this.left,
+              bottom: this.bottom,
+              right: this.right,
+              width: this.width,
+              height: this.height,
+              x: this.x,
+              y: this.y,
+            };
+          },
+        };
+      };
+    } catch (e) {}
+
+    try {
+      const _getClientRects = Element.prototype.getClientRects;
+      Element.prototype.getClientRects = function () {
+        const rects = _getClientRects.call(this);
+        const n = (Math.random() - 0.5) * 0.5;
+        return Array.from(rects).map((r) => ({
+          top: r.top + n,
+          left: r.left + n,
+          bottom: r.bottom + n,
+          right: r.right + n,
+          width: r.width + n,
+          height: r.height + n,
+          x: r.x + n,
+          y: r.y + n,
+          toJSON() {
+            return {
+              top: this.top,
+              left: this.left,
+              bottom: this.bottom,
+              right: this.right,
+              width: this.width,
+              height: this.height,
+              x: this.x,
+              y: this.y,
+            };
+          },
+        }));
+      };
+    } catch (e) {}
   }
 
   if (features.spoofSpeechSynthesis || features.blockSpeechSynthesis) {
@@ -1739,6 +1814,162 @@
     } catch (e) {
       console.warn("[privacy-guard] history strip patch failed:", e);
     }
+  }
+
+  if (features.spoofTimezone) {
+    try {
+      const _OrigDTF = Intl.DateTimeFormat;
+      const _OrigDTFProto = _OrigDTF.prototype;
+
+      function PgDateTimeFormat(locales, options) {
+        const opts = Object.assign({}, options ?? {}, { timeZone: "UTC" });
+        if (new.target) {
+          return Reflect.construct(_OrigDTF, [locales, opts], new.target);
+        }
+        return new _OrigDTF(locales, opts);
+      }
+
+      PgDateTimeFormat.prototype = _OrigDTFProto;
+      try {
+        PgDateTimeFormat.supportedLocalesOf =
+          _OrigDTF.supportedLocalesOf.bind(_OrigDTF);
+      } catch {}
+
+      try {
+        Object.defineProperty(Intl, "DateTimeFormat", {
+          value: PgDateTimeFormat,
+          configurable: true,
+          writable: true,
+        });
+      } catch {}
+    } catch {}
+
+    try {
+      Date.prototype.getTimezoneOffset = function () {
+        return 0;
+      };
+    } catch {}
+
+    try {
+      const _toLS = Date.prototype.toLocaleString;
+      Date.prototype.toLocaleString = function (...args) {
+        if (args[1]) {
+          args[1] = Object.assign({}, args[1], { timeZone: "UTC" });
+        } else {
+          args[1] = { timeZone: "UTC" };
+        }
+        return _toLS.apply(this, args);
+      };
+    } catch {}
+
+    try {
+      const _toLDS = Date.prototype.toLocaleDateString;
+      Date.prototype.toLocaleDateString = function (...args) {
+        if (args[1]) {
+          args[1] = Object.assign({}, args[1], { timeZone: "UTC" });
+        } else {
+          args[1] = { timeZone: "UTC" };
+        }
+        return _toLDS.apply(this, args);
+      };
+    } catch {}
+
+    try {
+      const _toLTS = Date.prototype.toLocaleTimeString;
+      Date.prototype.toLocaleTimeString = function (...args) {
+        if (args[1]) {
+          args[1] = Object.assign({}, args[1], { timeZone: "UTC" });
+        } else {
+          args[1] = { timeZone: "UTC" };
+        }
+        return _toLTS.apply(this, args);
+      };
+    } catch {}
+  }
+
+  if (features.spoofDevicePixelRatio) {
+    try {
+      Object.defineProperty(window, "devicePixelRatio", {
+        get: () => 1,
+        configurable: true,
+      });
+    } catch {}
+  }
+
+  if (features.spoofNavigatorPlatform) {
+    try {
+      Object.defineProperty(navigator, "platform", {
+        get: () => "Win32",
+        configurable: true,
+      });
+    } catch {}
+
+    try {
+      Object.defineProperty(navigator, "vendor", {
+        get: () => "Google Inc.",
+        configurable: true,
+      });
+    } catch {}
+
+    try {
+      if (navigator.userAgentData) {
+        const _pgBrands = Object.freeze([
+          Object.freeze({ brand: "Google Chrome", version: "124" }),
+          Object.freeze({ brand: "Chromium", version: "124" }),
+          Object.freeze({ brand: "Not-A.Brand", version: "99" }),
+        ]);
+        const _pgFullVersionList = Object.freeze([
+          Object.freeze({ brand: "Google Chrome", version: "124.0.0.0" }),
+          Object.freeze({ brand: "Chromium", version: "124.0.0.0" }),
+          Object.freeze({ brand: "Not-A.Brand", version: "99.0.0.0" }),
+        ]);
+        const _pgUAData = {
+          brands: _pgBrands,
+          mobile: false,
+          platform: "Windows",
+          getHighEntropyValues: async function () {
+            return {
+              architecture: "x86",
+              bitness: "64",
+              brands: _pgBrands,
+              fullVersionList: _pgFullVersionList,
+              mobile: false,
+              model: "",
+              platform: "Windows",
+              platformVersion: "15.0.0",
+              uaFullVersion: "124.0.0.0",
+            };
+          },
+          toJSON() {
+            return {
+              brands: this.brands,
+              mobile: this.mobile,
+              platform: this.platform,
+            };
+          },
+        };
+        Object.defineProperty(navigator, "userAgentData", {
+          get: () => _pgUAData,
+          configurable: true,
+        });
+      }
+    } catch {}
+  }
+
+  if (features.spoofLanguage) {
+    const _pgLangs = Object.freeze(["en-US", "en"]);
+    try {
+      Object.defineProperty(navigator, "language", {
+        get: () => "en-US",
+        configurable: true,
+      });
+    } catch {}
+    try {
+      Object.defineProperty(navigator, "languages", {
+        get: () => _pgLangs,
+        configurable: true,
+      });
+    } catch {}
   }
 
   const active = Object.entries(features)
