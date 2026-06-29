@@ -1241,11 +1241,33 @@
         console.warn("[privacy-guard] blockCanvas patch failed:", e);
       }
     } else {
+      const _pgCanvasNoiseSeed = (Math.random() * 0xffffffff) >>> 0;
+
+      const _pgFontNoiseSeed = (_pgCanvasNoiseSeed ^ 0xdeadbeef) >>> 0;
+
       function noisePixels(data) {
         for (let i = 0; i < data.length; i += 4) {
-          if (Math.random() < 0.05)
-            data[i + Math.floor(Math.random() * 3)] ^= 1;
+          if (Math.random() < 0.15) {
+            const ch = Math.floor(Math.random() * 3);
+            data[i + ch] = Math.max(
+              0,
+              Math.min(255, data[i + ch] + (Math.random() < 0.5 ? -1 : 1)),
+            );
+          }
         }
+      }
+
+      function pgFontNoise(fontStr, textStr) {
+        let h = _pgFontNoiseSeed;
+        const key =
+          (fontStr || "") + "\x01" + String(textStr || "").slice(0, 28);
+        for (let i = 0; i < key.length; i++) {
+          h ^= key.charCodeAt(i);
+          h = Math.imul(0x9e3779b1, h) | 0;
+          h ^= h >>> 15;
+        }
+
+        return ((h >>> 0) / 0x100000000 - 0.5) * 1.5;
       }
 
       try {
@@ -1311,6 +1333,51 @@
         };
       } catch (e) {
         console.warn("[privacy-guard] spoofCanvasNoise patch failed:", e);
+      }
+
+      try {
+        const _measureText = CanvasRenderingContext2D.prototype.measureText;
+        CanvasRenderingContext2D.prototype.measureText = function (text) {
+          const m = _measureText.call(this, text);
+          const noise = pgFontNoise(this.font, text);
+          return new Proxy(m, {
+            get(t, prop) {
+              if (prop === "width") return Math.max(0, t.width + noise);
+              if (prop === "actualBoundingBoxLeft")
+                return Math.max(0, t.actualBoundingBoxLeft + noise * 0.4);
+              if (prop === "actualBoundingBoxRight")
+                return Math.max(0, t.actualBoundingBoxRight + noise * 0.4);
+              const v = t[prop];
+              return typeof v === "function" ? v.bind(t) : v;
+            },
+          });
+        };
+      } catch (e) {
+        console.warn("[privacy-guard] measureText patch failed:", e);
+      }
+
+      if (typeof OffscreenCanvasRenderingContext2D !== "undefined") {
+        try {
+          const _ocMeasureText =
+            OffscreenCanvasRenderingContext2D.prototype.measureText;
+          OffscreenCanvasRenderingContext2D.prototype.measureText = function (
+            text,
+          ) {
+            const m = _ocMeasureText.call(this, text);
+            const noise = pgFontNoise(this.font, text);
+            return new Proxy(m, {
+              get(t, prop) {
+                if (prop === "width") return Math.max(0, t.width + noise);
+                if (prop === "actualBoundingBoxLeft")
+                  return Math.max(0, t.actualBoundingBoxLeft + noise * 0.4);
+                if (prop === "actualBoundingBoxRight")
+                  return Math.max(0, t.actualBoundingBoxRight + noise * 0.4);
+                const v = t[prop];
+                return typeof v === "function" ? v.bind(t) : v;
+              },
+            });
+          };
+        } catch (e) {}
       }
     }
 
