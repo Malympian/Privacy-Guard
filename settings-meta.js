@@ -116,7 +116,7 @@ const SETTINGS_META = [
   {
     key: "spoofTimezone",
     label: "Spoof timezone as UTC",
-    hint: "Forces Intl.DateTimeFormat to resolve as UTC and makes Date.prototype.getTimezoneOffset() return 0, hiding your local timezone. Also patches toLocaleString/toLocaleDateString/toLocaleTimeString to use UTC. Timezone is one of the most reliable single-signal identifiers for a user's physical location.",
+    hint: "Forces Intl.DateTimeFormat, toLocaleString/toLocaleDateString/toLocaleTimeString, and Date.prototype.toString/toDateString/toTimeString to report UTC, and makes Date.prototype.getTimezoneOffset() plus all local component getters (getHours, getDate, getDay, getMonth, getFullYear, etc.) consistent with UTC too — no leftover real-timezone string slips through any Date method. Timezone is one of the most reliable single-signal identifiers for a user's physical location.",
   },
   {
     key: "spoofPerformanceTiming",
@@ -216,7 +216,7 @@ const SETTINGS_META = [
   {
     key: "spoofCanvasNoise",
     label: "Add noise to canvas reads",
-    hint: "Flips the least-significant bit of ~5% of colour-channel pixels returned by toDataURL(), toBlob(), and getImageData() — imperceptible visually but breaks pixel-level canvas fingerprinting. The original canvas is never modified.",
+    hint: "Adds ±1 noise to ~15% of RGB pixels returned by toDataURL(), toBlob(), and getImageData(), and injects per-session seeded noise into measureText() width metrics — breaking both pixel-hash canvas fingerprinting and canvas-based font enumeration. Imperceptible visually; the original canvas is never modified.",
   },
   {
     key: "blockCanvas",
