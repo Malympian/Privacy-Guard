@@ -41,6 +41,11 @@ let currentSessionMode = "default";
 let editingSiteCustom = false;
 let currentDiscoveredItems = [];
 let currentRecommendations = {};
+const TIER_LABELS = {
+  recommended: "Suggested",
+  optional: "Optional",
+  caution: "Caution",
+};
 
 const menuBtnEl = document.getElementById("menu-btn");
 const navDrawerEl = document.getElementById("nav-drawer");
@@ -459,7 +464,6 @@ function classifyDiscoveredItem(item) {
   if (item.matchedDomain && !item.matchedViaHostnameHint) {
     return {
       level: "recommended",
-      label: item.matchedDomainCategory || "Known tracker domain",
       reason: item.matchedDomainCategory
         ? `${item.matchedDomain} is a known ${item.matchedDomainCategory.toLowerCase()} vendor — a dedicated tracking service, not something the page depends on.`
         : `${item.matchedDomain} matches a domain you've already chosen to block.`,
@@ -468,14 +472,12 @@ function classifyDiscoveredItem(item) {
   if (item.matchedViaHostnameHint) {
     return {
       level: "recommended",
-      label: "Dedicated telemetry subdomain",
       reason: `The hostname "${hostname}" is named like a dedicated analytics/pixel/telemetry endpoint, even though it's served from ${isFirstParty ? "this site's own domain" : "a third-party domain"}. Endpoints named this specifically are essentially never load-bearing for page functionality.`,
     };
   }
   if (item.via === "beacon") {
     return {
       level: "recommended",
-      label: "Fire-and-forget beacon",
       reason:
         "navigator.sendBeacon() is a one-way call the page never reads a response from — it's used almost exclusively for analytics, so blocking it can't break visible functionality.",
     };
@@ -485,20 +487,17 @@ function classifyDiscoveredItem(item) {
     if (CAUTION_URL_HINTS.test(url)) {
       return {
         level: "caution",
-        label: "Auth/session-shaped path",
         reason: `Matches "${item.matchedPatterns[0]}", but the URL also looks like it could be a session, login, or checkout call. Blocking it might log you out or break the page rather than just stop tracking — check before adding a rule.`,
       };
     }
     if (isFirstParty) {
       return {
         level: "optional",
-        label: "First-party + generic match",
         reason: `Matches "${item.matchedPatterns[0]}", but it's a first-party call to this site's own domain. Usually still safe to block, but first-party "events"/"metrics"-style endpoints occasionally carry real product features (live feeds, feature flags) alongside telemetry — worth a quick look.`,
       };
     }
     return {
       level: "recommended",
-      label: "Third-party tracking call",
       reason: `Third-party request matching "${item.matchedPatterns[0]}" — third-party calls with tracking-style naming are almost always pure telemetry.`,
     };
   }
@@ -506,7 +505,6 @@ function classifyDiscoveredItem(item) {
   if (CAUTION_URL_HINTS.test(url)) {
     return {
       level: "caution",
-      label: "Looks functional",
       reason:
         "Flagged by the broad scan, but the URL contains auth/session/checkout-style wording. This may be something the site needs to work correctly rather than pure tracking.",
     };
@@ -514,7 +512,6 @@ function classifyDiscoveredItem(item) {
 
   return {
     level: "optional",
-    label: "Unclear",
     reason:
       "Flagged by the general tracking-keyword scan, but it doesn't match a known vendor, a telemetry-named subdomain, or a confident pattern. Skim the URL before deciding.",
   };
@@ -970,15 +967,16 @@ async function renderDiscover() {
     }
 
     const rec = classifyDiscoveredItem(item);
+    const tierWord = TIER_LABELS[rec.level] ?? "Optional";
     const recRow = document.createElement("div");
     recRow.className = "disc-rec-row";
     const recDot = document.createElement("span");
     recDot.className = `rec-dot rec-${rec.level}`;
-    recDot.title = rec.reason;
+    recDot.title = `${tierWord} — ${rec.reason}`;
     const recLabel = document.createElement("span");
     recLabel.className = "disc-rec-text";
-    recLabel.textContent = rec.label;
-    recLabel.title = rec.reason;
+    recLabel.textContent = tierWord;
+    recLabel.title = recDot.title;
     recRow.append(recDot, recLabel);
     body.append(recRow);
 
