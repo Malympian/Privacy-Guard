@@ -666,6 +666,9 @@
         margin-bottom: 9px;
         line-height: 1.4;
       }
+      .feat-search {
+        margin-bottom: 10px;
+      }
       .feat-list {
         display: flex;
         flex-direction: column;
@@ -1143,21 +1146,15 @@
       }
       .rec-dot.rec-recommended {
         background: var(--green);
-        box-shadow:
-          0 0 0 2.5px var(--green-bg),
-          0 0 0 3.5px var(--green-border);
+        box-shadow: 0 0 0 2.5px var(--green-bg), 0 0 0 3.5px var(--green-border);
       }
       .rec-dot.rec-optional {
         background: #f59e0b;
-        box-shadow:
-          0 0 0 2.5px var(--yellow-bg),
-          0 0 0 3.5px var(--yellow-border);
+        box-shadow: 0 0 0 2.5px var(--yellow-bg), 0 0 0 3.5px var(--yellow-border);
       }
       .rec-dot.rec-caution {
         background: var(--red);
-        box-shadow:
-          0 0 0 2.5px var(--red-bg),
-          0 0 0 3.5px var(--red-border);
+        box-shadow: 0 0 0 2.5px var(--red-bg), 0 0 0 3.5px var(--red-border);
       }
 
       .rec-legend {
@@ -1204,6 +1201,7 @@
         color: var(--muted);
         cursor: help;
       }
+      /* ────────────────────────────────────────────────────────────────────── */
     </style>
   </head>
   <body>
@@ -1467,16 +1465,17 @@
                 >Intercepts outgoing requests to known tracking endpoints.</p
               >
               <div class="rec-legend">
-                <div class="rec-legend-item"
-                  ><span class="rec-dot rec-recommended"></span>Suggested</div
-                >
-                <div class="rec-legend-item"
-                  ><span class="rec-dot rec-optional"></span>Optional</div
-                >
-                <div class="rec-legend-item"
-                  ><span class="rec-dot rec-caution"></span>Caution</div
-                >
+                <div class="rec-legend-item"><span class="rec-dot rec-recommended"></span>Suggested</div>
+                <div class="rec-legend-item"><span class="rec-dot rec-optional"></span>Optional</div>
+                <div class="rec-legend-item"><span class="rec-dot rec-caution"></span>Caution</div>
               </div>
+              <input
+                type="text"
+                id="feat-search-blocking"
+                class="full-input feat-search"
+                placeholder="Search settings…"
+                spellcheck="false"
+              />
               <div id="features-list-blocking" class="feat-list"></div>
             </div>
           </div>
@@ -1495,16 +1494,17 @@
                 scripts.</p
               >
               <div class="rec-legend">
-                <div class="rec-legend-item"
-                  ><span class="rec-dot rec-recommended"></span>Suggested</div
-                >
-                <div class="rec-legend-item"
-                  ><span class="rec-dot rec-optional"></span>Optional</div
-                >
-                <div class="rec-legend-item"
-                  ><span class="rec-dot rec-caution"></span>Caution</div
-                >
+                <div class="rec-legend-item"><span class="rec-dot rec-recommended"></span>Suggested</div>
+                <div class="rec-legend-item"><span class="rec-dot rec-optional"></span>Optional</div>
+                <div class="rec-legend-item"><span class="rec-dot rec-caution"></span>Caution</div>
               </div>
+              <input
+                type="text"
+                id="feat-search-spoofing"
+                class="full-input feat-search"
+                placeholder="Search settings…"
+                spellcheck="false"
+              />
               <div id="features-list-spoofing" class="feat-list"></div>
             </div>
           </div>
