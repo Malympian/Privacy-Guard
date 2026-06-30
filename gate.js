@@ -134,8 +134,6 @@ function requestInject(hadSyncCacheHit) {
 
       if (!response?.inject) return;
 
-      if (hadSyncCacheHit) return;
-
       injectConfigAndGuard(response.config);
     },
   );
