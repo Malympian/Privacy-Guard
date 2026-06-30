@@ -28,6 +28,8 @@ const exceptionsListEl = document.getElementById("exceptions-list");
 const reloadNoticeEl = document.getElementById("reload-notice");
 const settingsNoticeEl = document.getElementById("settings-notice");
 const featuresHintEl = document.getElementById("features-hint");
+const featSearchBlockingEl = document.getElementById("feat-search-blocking");
+const featSearchSpoofingEl = document.getElementById("feat-search-spoofing");
 
 const sessionBtns = {
   default: document.getElementById("session-default"),
@@ -41,6 +43,9 @@ let currentSessionMode = "default";
 let editingSiteCustom = false;
 let currentDiscoveredItems = [];
 let currentRecommendations = {};
+let lastSyncSnapshot = null;
+let featSearchBlocking = "";
+let featSearchSpoofing = "";
 const TIER_LABELS = {
   recommended: "Suggested",
   optional: "Optional",
@@ -519,13 +524,10 @@ function classifyDiscoveredItem(item) {
 
 function getFeaturesForEditing(sync) {
   const features =
-    editingSiteCustom &&
-    currentHost &&
-    sync.siteOverrides?.[currentHost]?.features
+    editingSiteCustom && currentHost
       ? {
           ...DEFAULT_FEATURES,
-          ...sync.features,
-          ...sync.siteOverrides[currentHost].features,
+          ...(sync.siteOverrides?.[currentHost]?.features ?? {}),
         }
       : { ...DEFAULT_FEATURES, ...sync.features };
 
@@ -541,6 +543,26 @@ function getFeaturesForEditing(sync) {
   }
 
   return features;
+}
+
+function featureTextMatchesQuery(key, query) {
+  if (!query) return true;
+  const meta = SETTINGS_META.find((m) => m.key === key);
+  if (!meta) return false;
+  const q = query.trim().toLowerCase();
+  return (
+    meta.key.toLowerCase().includes(q) ||
+    meta.label.toLowerCase().includes(q) ||
+    meta.hint.toLowerCase().includes(q)
+  );
+}
+
+function featureRowMatchesQuery(key, query) {
+  if (!query) return true;
+  if (featureTextMatchesQuery(key, query)) return true;
+  return SETTINGS_META.some(
+    (m) => m.parentKey === key && featureTextMatchesQuery(m.key, query),
+  );
 }
 
 function renderFeaturesInto(containerEl, keysFilter, sync) {
@@ -621,7 +643,6 @@ function renderFeaturesInto(containerEl, keysFilter, sync) {
               };
               entry.useCustom = true;
               entry.features = {
-                ...DEFAULT_FEATURES,
                 ...entry.features,
                 ...updates,
               };
@@ -660,7 +681,6 @@ function renderFeaturesInto(containerEl, keysFilter, sync) {
         const entry = so[currentHost] ?? { useCustom: true, features: {} };
         entry.useCustom = true;
         entry.features = {
-          ...DEFAULT_FEATURES,
           ...entry.features,
           ...allUpdates,
         };
@@ -710,29 +730,47 @@ function renderFeaturesInto(containerEl, keysFilter, sync) {
       containerEl.appendChild(childItem);
     }
   }
+
+  if (!containerEl.children.length) {
+    const empty = document.createElement("p");
+    empty.className = "feat-note";
+    empty.textContent = "No settings match your search.";
+    containerEl.appendChild(empty);
+  }
+}
+
+function withFeatureSearch(baseFilter, query) {
+  return (k) => {
+    if (!baseFilter(k)) return false;
+    const meta = SETTINGS_META.find((m) => m.key === k);
+    return meta?.parentKey
+      ? featureTextMatchesQuery(k, query)
+      : featureRowMatchesQuery(k, query);
+  };
 }
 
 function renderFeatures(sync) {
+  lastSyncSnapshot = sync;
   const blockingEl = document.getElementById("features-list-blocking");
   const spoofingEl = document.getElementById("features-list-spoofing");
 
   renderFeaturesInto(
     blockingEl,
-    (k) => {
+    withFeatureSearch((k) => {
       const meta = SETTINGS_META.find((m) => m.key === k);
       return BLOCKING_KEYS.has(k) && !meta?.parentKey;
-    },
+    }, featSearchBlocking),
     sync,
   );
 
   renderFeaturesInto(
     spoofingEl,
-    (k) => {
+    withFeatureSearch((k) => {
       return (
         !BLOCKING_KEYS.has(k) ||
         SETTINGS_META.find((m) => m.key === k)?.parentKey
       );
-    },
+    }, featSearchSpoofing),
     sync,
   );
 
@@ -741,6 +779,19 @@ function renderFeatures(sync) {
       editingSiteCustom && currentHost
         ? `Custom settings — ${currentHost}`
         : "Behavioral Spoofing";
+}
+
+if (featSearchBlockingEl) {
+  featSearchBlockingEl.addEventListener("input", () => {
+    featSearchBlocking = featSearchBlockingEl.value;
+    if (lastSyncSnapshot) renderFeatures(lastSyncSnapshot);
+  });
+}
+if (featSearchSpoofingEl) {
+  featSearchSpoofingEl.addEventListener("input", () => {
+    featSearchSpoofing = featSearchSpoofingEl.value;
+    if (lastSyncSnapshot) renderFeatures(lastSyncSnapshot);
+  });
 }
 
 async function renderBlockLog() {
@@ -1296,7 +1347,7 @@ siteCustomEl.addEventListener("change", async () => {
   if (siteCustomEl.checked) {
     so[currentHost] = {
       useCustom: true,
-      features: { ...DEFAULT_FEATURES, ...sync.features },
+      features: {},
     };
     editingSiteCustom = true;
   } else {
