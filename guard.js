@@ -1297,6 +1297,17 @@
     }
   }
 
+  function _pgMaskFnToString(fn, label) {
+    try {
+      Object.defineProperty(fn, "toString", {
+        value: () => `function ${label}() { [native code] }`,
+        configurable: true,
+        writable: true,
+      });
+    } catch {}
+    return fn;
+  }
+
   if (features.spoofCanvasNoise || features.blockCanvas) {
     const _toDataURL = PG.canvasToDataURL;
     const _toBlob = PG.canvasToBlob;
@@ -1304,26 +1315,29 @@
 
     if (features.blockCanvas) {
       try {
-        HTMLCanvasElement.prototype.toDataURL = function (...args) {
+        HTMLCanvasElement.prototype.toDataURL = _pgMaskFnToString(function (
+          ...args
+        ) {
           const blank = document.createElement("canvas");
           blank.width = Math.max(1, this.width);
           blank.height = Math.max(1, this.height);
           return _toDataURL.call(blank, ...args);
-        };
-        HTMLCanvasElement.prototype.toBlob = function (callback, ...args) {
+        }, "toDataURL");
+        HTMLCanvasElement.prototype.toBlob = _pgMaskFnToString(function (
+          callback,
+          ...args
+        ) {
           const blank = document.createElement("canvas");
           blank.width = Math.max(1, this.width);
           blank.height = Math.max(1, this.height);
           _toBlob.call(blank, callback, ...args);
-        };
-        CanvasRenderingContext2D.prototype.getImageData = function (
-          sx,
-          sy,
-          sw,
-          sh,
-        ) {
-          return new ImageData(Math.max(1, sw | 0), Math.max(1, sh | 0));
-        };
+        }, "toBlob");
+        CanvasRenderingContext2D.prototype.getImageData = _pgMaskFnToString(
+          function (sx, sy, sw, sh) {
+            return new ImageData(Math.max(1, sw | 0), Math.max(1, sh | 0));
+          },
+          "getImageData",
+        );
       } catch (e) {
         console.warn("[privacy-guard] blockCanvas patch failed:", e);
       }
@@ -1379,19 +1393,18 @@
       }
 
       try {
-        CanvasRenderingContext2D.prototype.getImageData = function (
-          sx,
-          sy,
-          sw,
-          sh,
-          ...rest
-        ) {
-          const id = _ctx2dGetImageData.call(this, sx, sy, sw, sh, ...rest);
-          noisePixels(id.data);
-          return id;
-        };
+        CanvasRenderingContext2D.prototype.getImageData = _pgMaskFnToString(
+          function (sx, sy, sw, sh, ...rest) {
+            const id = _ctx2dGetImageData.call(this, sx, sy, sw, sh, ...rest);
+            noisePixels(id.data);
+            return id;
+          },
+          "getImageData",
+        );
 
-        HTMLCanvasElement.prototype.toDataURL = function (...args) {
+        HTMLCanvasElement.prototype.toDataURL = _pgMaskFnToString(function (
+          ...args
+        ) {
           try {
             const tmp = document.createElement("canvas");
             tmp.width = Math.max(1, this.width);
@@ -1412,9 +1425,12 @@
           } catch {
             return _toDataURL.apply(this, args);
           }
-        };
+        }, "toDataURL");
 
-        HTMLCanvasElement.prototype.toBlob = function (callback, ...args) {
+        HTMLCanvasElement.prototype.toBlob = _pgMaskFnToString(function (
+          callback,
+          ...args
+        ) {
           try {
             const tmp = document.createElement("canvas");
             tmp.width = Math.max(1, this.width);
@@ -1438,28 +1454,31 @@
           } catch {
             _toBlob.call(this, callback, ...args);
           }
-        };
+        }, "toBlob");
       } catch (e) {
         console.warn("[privacy-guard] spoofCanvasNoise patch failed:", e);
       }
 
       try {
         const _measureText = PG.ctx2dMeasureText;
-        CanvasRenderingContext2D.prototype.measureText = function (text) {
-          const m = _measureText.call(this, text);
-          const noise = pgFontNoise(this.font, text);
-          return new Proxy(m, {
-            get(t, prop) {
-              if (prop === "width") return Math.max(0, t.width + noise);
-              if (prop === "actualBoundingBoxLeft")
-                return Math.max(0, t.actualBoundingBoxLeft + noise * 0.4);
-              if (prop === "actualBoundingBoxRight")
-                return Math.max(0, t.actualBoundingBoxRight + noise * 0.4);
-              const v = t[prop];
-              return typeof v === "function" ? v.bind(t) : v;
-            },
-          });
-        };
+        CanvasRenderingContext2D.prototype.measureText = _pgMaskFnToString(
+          function (text) {
+            const m = _measureText.call(this, text);
+            const noise = pgFontNoise(this.font, text);
+            return new Proxy(m, {
+              get(t, prop) {
+                if (prop === "width") return Math.max(0, t.width + noise);
+                if (prop === "actualBoundingBoxLeft")
+                  return Math.max(0, t.actualBoundingBoxLeft + noise * 0.4);
+                if (prop === "actualBoundingBoxRight")
+                  return Math.max(0, t.actualBoundingBoxRight + noise * 0.4);
+                const v = t[prop];
+                return typeof v === "function" ? v.bind(t) : v;
+              },
+            });
+          },
+          "measureText",
+        );
       } catch (e) {
         console.warn("[privacy-guard] measureText patch failed:", e);
       }
@@ -1528,17 +1547,6 @@
   }
 
   if (features.spoofWebGL || features.blockWebGL) {
-    function _pgMaskFnToString(fn, label) {
-      try {
-        Object.defineProperty(fn, "toString", {
-          value: () => `function ${label}() { [native code] }`,
-          configurable: true,
-          writable: true,
-        });
-      } catch {}
-      return fn;
-    }
-
     if (features.blockWebGL) {
       const _getCtx = PG.canvasGetContext;
       try {
