@@ -1250,18 +1250,39 @@
         console.warn("[privacy-guard] blockCanvas patch failed:", e);
       }
     } else {
-      const _pgCanvasNoiseSeed = (Math.random() * 0xffffffff) >>> 0;
+      function _pgSessionSeed() {
+        try {
+          const key = "__pgCanvasSeed:" + location.hostname;
+          const existing = sessionStorage.getItem(key);
+          if (existing) return parseInt(existing, 10) >>> 0;
+          const fresh = (Math.random() * 0xffffffff) >>> 0;
+          sessionStorage.setItem(key, String(fresh));
+          return fresh;
+        } catch {
+          return (Math.random() * 0xffffffff) >>> 0;
+        }
+      }
+
+      const _pgCanvasNoiseSeed = _pgSessionSeed();
 
       const _pgFontNoiseSeed = (_pgCanvasNoiseSeed ^ 0xdeadbeef) >>> 0;
 
+      function _pgPixelHash(i, r, g, b) {
+        let h = (_pgCanvasNoiseSeed ^ Math.imul(i, 2654435761)) >>> 0;
+        h = Math.imul(h ^ r, 0x9e3779b1) >>> 0;
+        h = Math.imul(h ^ g, 0x85ebca77) >>> 0;
+        h = Math.imul(h ^ b, 0xc2b2ae3d) >>> 0;
+        h ^= h >>> 15;
+        return h >>> 0;
+      }
+
       function noisePixels(data) {
         for (let i = 0; i < data.length; i += 4) {
-          if (Math.random() < 0.15) {
-            const ch = Math.floor(Math.random() * 3);
-            data[i + ch] = Math.max(
-              0,
-              Math.min(255, data[i + ch] + (Math.random() < 0.5 ? -1 : 1)),
-            );
+          const h = _pgPixelHash(i, data[i], data[i + 1], data[i + 2]);
+          if (h / 0xffffffff < 0.15) {
+            const ch = h % 3;
+            const sign = h & 0x100 ? 1 : -1;
+            data[i + ch] = Math.max(0, Math.min(255, data[i + ch] + sign));
           }
         }
       }
@@ -1431,30 +1452,68 @@
   }
 
   if (features.spoofWebGL || features.blockWebGL) {
+    function _pgMaskFnToString(fn, label) {
+      try {
+        Object.defineProperty(fn, "toString", {
+          value: () => `function ${label}() { [native code] }`,
+          configurable: true,
+          writable: true,
+        });
+      } catch {}
+      return fn;
+    }
+
     if (features.blockWebGL) {
       const _getCtx = HTMLCanvasElement.prototype.getContext;
       try {
-        HTMLCanvasElement.prototype.getContext = function (type, ...args) {
+        HTMLCanvasElement.prototype.getContext = _pgMaskFnToString(function (
+          type,
+          ...args
+        ) {
           const t = String(type).toLowerCase();
           if (t === "webgl" || t === "webgl2" || t === "experimental-webgl")
             return null;
           return _getCtx.call(this, type, ...args);
-        };
+        }, "getContext");
       } catch (e) {
         console.warn("[privacy-guard] blockWebGL canvas patch failed:", e);
       }
       if (typeof OffscreenCanvas !== "undefined") {
         const _ocGetCtx = OffscreenCanvas.prototype.getContext;
         try {
-          OffscreenCanvas.prototype.getContext = function (type, ...args) {
+          OffscreenCanvas.prototype.getContext = _pgMaskFnToString(function (
+            type,
+            ...args
+          ) {
             const t = String(type).toLowerCase();
             if (t === "webgl" || t === "webgl2" || t === "experimental-webgl")
               return null;
             return _ocGetCtx.call(this, type, ...args);
-          };
+          }, "getContext");
         } catch (e) {}
       }
     } else {
+      function _pgWebglSeed() {
+        try {
+          const key = "__pgWebglSeed:" + location.hostname;
+          const existing = sessionStorage.getItem(key);
+          if (existing) return parseInt(existing, 10) >>> 0;
+          const fresh = (Math.random() * 0xffffffff) >>> 0;
+          sessionStorage.setItem(key, String(fresh));
+          return fresh;
+        } catch {
+          return (Math.random() * 0xffffffff) >>> 0;
+        }
+      }
+      const _pgGlNoiseSeed = _pgWebglSeed();
+
+      function _pgGlPixelHash(i, v) {
+        let h = (_pgGlNoiseSeed ^ Math.imul(i, 2654435761)) >>> 0;
+        h = Math.imul(h ^ v, 0x9e3779b1) >>> 0;
+        h ^= h >>> 15;
+        return h >>> 0;
+      }
+
       for (const Ctor of [
         globalThis.WebGLRenderingContext,
         globalThis.WebGL2RenderingContext,
@@ -1464,34 +1523,34 @@
 
         try {
           const _getExt = proto.getExtension;
-          proto.getExtension = function (name) {
+          proto.getExtension = _pgMaskFnToString(function (name) {
             if (name === "WEBGL_debug_renderer_info") return null;
             return _getExt.call(this, name);
-          };
+          }, "getExtension");
         } catch (e) {}
 
         try {
           const _getSuppExt = proto.getSupportedExtensions;
-          proto.getSupportedExtensions = function () {
+          proto.getSupportedExtensions = _pgMaskFnToString(function () {
             const list = _getSuppExt.call(this);
             if (!Array.isArray(list)) return list;
             return list.filter((e) => e !== "WEBGL_debug_renderer_info");
-          };
+          }, "getSupportedExtensions");
         } catch (e) {}
 
         try {
           const _getParam = proto.getParameter;
-          proto.getParameter = function (param) {
-            if (param === 0x9245) return "Google Inc.";
+          proto.getParameter = _pgMaskFnToString(function (param) {
+            if (param === 0x9245) return "Google Inc. (Intel)";
             if (param === 0x9246)
               return "ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0, D3D11)";
             return _getParam.call(this, param);
-          };
+          }, "getParameter");
         } catch (e) {}
 
         try {
           const _readPx = proto.readPixels;
-          proto.readPixels = function (
+          proto.readPixels = _pgMaskFnToString(function (
             x,
             y,
             w,
@@ -1507,11 +1566,13 @@
               pixels instanceof Uint8ClampedArray
             ) {
               for (let i = 0; i < pixels.length; i += 4) {
-                if (Math.random() < 0.05)
-                  pixels[i + Math.floor(Math.random() * 3)] ^= 1;
+                const hash = _pgGlPixelHash(i, pixels[i]);
+                if (hash / 0xffffffff < 0.05) {
+                  pixels[i + (hash % 3)] ^= 1;
+                }
               }
             }
-          };
+          }, "readPixels");
         } catch (e) {}
       }
     }
@@ -2142,19 +2203,46 @@
   }
 
   if (features.spoofNavigatorPlatform) {
-    try {
-      Object.defineProperty(navigator, "platform", {
-        get: () => "Win32",
-        configurable: true,
-      });
-    } catch {}
+    function pgMaskToString(fn, label) {
+      try {
+        Object.defineProperty(fn, "toString", {
+          value: () => `function ${label}() { [native code] }`,
+          configurable: true,
+          writable: true,
+        });
+      } catch {}
+      return fn;
+    }
+
+    function pgDefineGetter(obj, prop, getter) {
+      try {
+        Object.defineProperty(obj, prop, {
+          get: pgMaskToString(getter, "get " + prop),
+          configurable: true,
+        });
+      } catch {}
+    }
 
     try {
-      Object.defineProperty(navigator, "vendor", {
-        get: () => "Google Inc.",
-        configurable: true,
-      });
+      const _realUA = navigator.userAgent;
+      const _pgFakeUA = _realUA
+        .replace(
+          /Macintosh; Intel Mac OS X [\d_]+/,
+          "Windows NT 10.0; Win64; x64",
+        )
+        .replace(/\(X11; Linux[^)]*\)/, "(Windows NT 10.0; Win64; x64)")
+        .replace(
+          /\(Linux; Android[^);]*;?[^)]*\)/,
+          "(Windows NT 10.0; Win64; x64)",
+        );
+      const _pgFakeAppVersion = _pgFakeUA.replace(/^Mozilla\//, "");
+
+      pgDefineGetter(navigator, "userAgent", () => _pgFakeUA);
+      pgDefineGetter(navigator, "appVersion", () => _pgFakeAppVersion);
     } catch {}
+
+    pgDefineGetter(navigator, "platform", () => "Win32");
+    pgDefineGetter(navigator, "vendor", () => "Google Inc.");
 
     try {
       if (navigator.userAgentData) {
@@ -2201,7 +2289,7 @@
           },
         };
         Object.defineProperty(navigator, "userAgentData", {
-          get: () => _pgUAData,
+          get: pgMaskToString(() => _pgUAData, "get userAgentData"),
           configurable: true,
         });
       }
