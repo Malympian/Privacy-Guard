@@ -1,9 +1,81 @@
 (function () {
   "use strict";
 
-  if (globalThis.__privacyGuardInstalled) {
-    console.info("[privacy-guard] already installed — skipping re-patch");
-    return;
+  const PG = (globalThis.__pgNatives ??= (() => {
+    const has = (obj, prop) => typeof obj !== "undefined" && obj && prop in obj;
+    return {
+      fetch: globalThis.fetch,
+      xhrOpen: XMLHttpRequest.prototype.open,
+      xhrSend: XMLHttpRequest.prototype.send,
+      sendBeacon: navigator.sendBeacon?.bind(navigator),
+      canvasToDataURL: has(globalThis, "HTMLCanvasElement")
+        ? HTMLCanvasElement.prototype.toDataURL
+        : null,
+      canvasToBlob: has(globalThis, "HTMLCanvasElement")
+        ? HTMLCanvasElement.prototype.toBlob
+        : null,
+      canvasGetContext: has(globalThis, "HTMLCanvasElement")
+        ? HTMLCanvasElement.prototype.getContext
+        : null,
+      ctx2dGetImageData: has(globalThis, "CanvasRenderingContext2D")
+        ? CanvasRenderingContext2D.prototype.getImageData
+        : null,
+      ctx2dMeasureText: has(globalThis, "CanvasRenderingContext2D")
+        ? CanvasRenderingContext2D.prototype.measureText
+        : null,
+      offscreenGetContext: has(globalThis, "OffscreenCanvas")
+        ? OffscreenCanvas.prototype.getContext
+        : null,
+      offscreenConvertToBlob: has(globalThis, "OffscreenCanvas")
+        ? OffscreenCanvas.prototype.convertToBlob
+        : null,
+      offscreenCtxGetImageData: has(
+        globalThis,
+        "OffscreenCanvasRenderingContext2D",
+      )
+        ? OffscreenCanvasRenderingContext2D.prototype.getImageData
+        : null,
+      offscreenCtxMeasureText: has(
+        globalThis,
+        "OffscreenCanvasRenderingContext2D",
+      )
+        ? OffscreenCanvasRenderingContext2D.prototype.measureText
+        : null,
+      audioBufferGetChannelData: has(globalThis, "AudioBuffer")
+        ? AudioBuffer.prototype.getChannelData
+        : null,
+      audioBufferCopyFromChannel: has(globalThis, "AudioBuffer")
+        ? AudioBuffer.prototype.copyFromChannel
+        : null,
+      analyserGetFloatFrequencyData: has(globalThis, "AnalyserNode")
+        ? AnalyserNode.prototype.getFloatFrequencyData
+        : null,
+      analyserGetFloatTimeDomainData: has(globalThis, "AnalyserNode")
+        ? AnalyserNode.prototype.getFloatTimeDomainData
+        : null,
+      elementGetBoundingClientRect: Element.prototype.getBoundingClientRect,
+      elementGetClientRects: Element.prototype.getClientRects,
+      performanceNow: Performance.prototype.now,
+      performanceGetEntries: Performance.prototype.getEntries,
+      performanceGetEntriesByType: Performance.prototype.getEntriesByType,
+      performanceGetEntriesByName: Performance.prototype.getEntriesByName,
+      speechGetVoices: has(globalThis, "SpeechSynthesis")
+        ? SpeechSynthesis.prototype.getVoices
+        : null,
+      addEventListener: EventTarget.prototype.addEventListener,
+      removeEventListener: EventTarget.prototype.removeEventListener,
+      canvasCaptureStream: has(globalThis, "HTMLCanvasElement")
+        ? HTMLCanvasElement.prototype.captureStream
+        : null,
+    };
+  })());
+
+  function configsMatch(cfg) {
+    try {
+      return globalThis.__privacyGuardAppliedConfigJSON === JSON.stringify(cfg);
+    } catch {
+      return false;
+    }
   }
 
   function readConfig() {
@@ -33,15 +105,21 @@
   if (!cfg) {
     return;
   }
+  if (configsMatch(cfg)) {
+    console.info(
+      "[privacy-guard] config unchanged — skipping redundant re-patch",
+    );
+    return;
+  }
   globalThis.__privacyGuardInstalled = true;
   globalThis.__privacyGuardObservesRequests = true;
+  try {
+    globalThis.__privacyGuardAppliedConfigJSON = JSON.stringify(cfg);
+  } catch {}
 
   const features = cfg.features ?? {};
 
-  const _nativeCaptureStream =
-    typeof HTMLCanvasElement !== "undefined"
-      ? HTMLCanvasElement.prototype.captureStream
-      : null;
+  const _nativeCaptureStream = PG.canvasCaptureStream;
 
   const blockedPatterns = cfg.blockedPatterns ?? [];
   const exceptions = cfg.exceptions ?? [];
@@ -160,7 +238,7 @@
     features.blockTrackingRequests ||
     features.blockKnownTrackers
   ) {
-    const _fetch = globalThis.fetch;
+    const _fetch = PG.fetch;
     globalThis.fetch = function (...args) {
       const url =
         args[0] instanceof Request ? args[0].url : String(args[0] ?? "");
@@ -174,8 +252,8 @@
     };
     globalThis.fetch.__pgPatched = true;
 
-    const _xhrOpen = XMLHttpRequest.prototype.open;
-    const _xhrSend = XMLHttpRequest.prototype.send;
+    const _xhrOpen = PG.xhrOpen;
+    const _xhrSend = PG.xhrSend;
 
     XMLHttpRequest.prototype.open = function (method, url, ...rest) {
       this.__pgUrl = String(url ?? "");
@@ -192,7 +270,7 @@
       return _xhrSend.call(this, body);
     };
 
-    const _beacon = navigator.sendBeacon.bind(navigator);
+    const _beacon = PG.sendBeacon;
     navigator.sendBeacon = function (url, data) {
       const blocked = isBlocked(url);
       postObserve(url, "beacon", blocked);
@@ -320,8 +398,8 @@
     features.blockTabEnumeration;
 
   if (needsWrap) {
-    const _ael = EventTarget.prototype.addEventListener;
-    const _rel = EventTarget.prototype.removeEventListener;
+    const _ael = PG.addEventListener;
+    const _rel = PG.removeEventListener;
 
     function stopSignal(event) {
       event.stopImmediatePropagation();
@@ -556,7 +634,7 @@
     const PERF_NOISE_MS = 0.5;
 
     try {
-      const _perfNow = Performance.prototype.now;
+      const _perfNow = PG.performanceNow;
       Performance.prototype.now = function () {
         return _perfNow.call(this) + (Math.random() - 0.5) * PERF_NOISE_MS * 2;
       };
@@ -1180,9 +1258,9 @@
     }
 
     try {
-      const _getEntries = Performance.prototype.getEntries;
-      const _getEntriesByType = Performance.prototype.getEntriesByType;
-      const _getEntriesByName = Performance.prototype.getEntriesByName;
+      const _getEntries = PG.performanceGetEntries;
+      const _getEntriesByType = PG.performanceGetEntriesByType;
+      const _getEntriesByName = PG.performanceGetEntriesByName;
 
       Performance.prototype.getEntries = function (...args) {
         return _getEntries.apply(this, args).map(scrubTimingEntry);
@@ -1220,9 +1298,9 @@
   }
 
   if (features.spoofCanvasNoise || features.blockCanvas) {
-    const _toDataURL = HTMLCanvasElement.prototype.toDataURL;
-    const _toBlob = HTMLCanvasElement.prototype.toBlob;
-    const _ctx2dGetImageData = CanvasRenderingContext2D.prototype.getImageData;
+    const _toDataURL = PG.canvasToDataURL;
+    const _toBlob = PG.canvasToBlob;
+    const _ctx2dGetImageData = PG.ctx2dGetImageData;
 
     if (features.blockCanvas) {
       try {
@@ -1366,7 +1444,7 @@
       }
 
       try {
-        const _measureText = CanvasRenderingContext2D.prototype.measureText;
+        const _measureText = PG.ctx2dMeasureText;
         CanvasRenderingContext2D.prototype.measureText = function (text) {
           const m = _measureText.call(this, text);
           const noise = pgFontNoise(this.font, text);
@@ -1388,8 +1466,7 @@
 
       if (typeof OffscreenCanvasRenderingContext2D !== "undefined") {
         try {
-          const _ocMeasureText =
-            OffscreenCanvasRenderingContext2D.prototype.measureText;
+          const _ocMeasureText = PG.offscreenCtxMeasureText;
           OffscreenCanvasRenderingContext2D.prototype.measureText = function (
             text,
           ) {
@@ -1413,8 +1490,7 @@
 
     if (typeof OffscreenCanvas !== "undefined") {
       try {
-        const _ocGetImageData =
-          OffscreenCanvasRenderingContext2D.prototype.getImageData;
+        const _ocGetImageData = PG.offscreenCtxGetImageData;
         OffscreenCanvasRenderingContext2D.prototype.getImageData = function (
           ...args
         ) {
@@ -1427,7 +1503,7 @@
         };
       } catch (e) {}
       try {
-        const _convertToBlob = OffscreenCanvas.prototype.convertToBlob;
+        const _convertToBlob = PG.offscreenConvertToBlob;
         OffscreenCanvas.prototype.convertToBlob = async function (opts) {
           if (features.blockCanvas) {
             const blank = new OffscreenCanvas(
@@ -1464,7 +1540,7 @@
     }
 
     if (features.blockWebGL) {
-      const _getCtx = HTMLCanvasElement.prototype.getContext;
+      const _getCtx = PG.canvasGetContext;
       try {
         HTMLCanvasElement.prototype.getContext = _pgMaskFnToString(function (
           type,
@@ -1479,7 +1555,7 @@
         console.warn("[privacy-guard] blockWebGL canvas patch failed:", e);
       }
       if (typeof OffscreenCanvas !== "undefined") {
-        const _ocGetCtx = OffscreenCanvas.prototype.getContext;
+        const _ocGetCtx = PG.offscreenGetContext;
         try {
           OffscreenCanvas.prototype.getContext = _pgMaskFnToString(function (
             type,
@@ -1600,8 +1676,8 @@
 
     if (typeof AudioBuffer !== "undefined") {
       try {
-        const _getChannelData = AudioBuffer.prototype.getChannelData;
-        const _copyFromChannel = AudioBuffer.prototype.copyFromChannel;
+        const _getChannelData = PG.audioBufferGetChannelData;
+        const _copyFromChannel = PG.audioBufferCopyFromChannel;
 
         AudioBuffer.prototype.getChannelData = function (channel) {
           const data = _getChannelData.call(this, channel);
@@ -1638,8 +1714,8 @@
 
     if (typeof AnalyserNode !== "undefined") {
       try {
-        const _getFloatFreq = AnalyserNode.prototype.getFloatFrequencyData;
-        const _getFloatTime = AnalyserNode.prototype.getFloatTimeDomainData;
+        const _getFloatFreq = PG.analyserGetFloatFrequencyData;
+        const _getFloatTime = PG.analyserGetFloatTimeDomainData;
 
         AnalyserNode.prototype.getFloatFrequencyData = function (array) {
           if (features.blockAudioFingerprint) {
@@ -1698,7 +1774,7 @@
     }
 
     try {
-      const _getBCR = Element.prototype.getBoundingClientRect;
+      const _getBCR = PG.elementGetBoundingClientRect;
       Element.prototype.getBoundingClientRect = function () {
         const r = _getBCR.call(this);
 
@@ -1763,7 +1839,7 @@
     } catch (e) {}
 
     try {
-      const _getClientRects = Element.prototype.getClientRects;
+      const _getClientRects = PG.elementGetClientRects;
       Element.prototype.getClientRects = function () {
         const rects = _getClientRects.call(this);
         const nx = (Math.random() - 0.5) * 2;
@@ -1802,7 +1878,7 @@
   if (features.spoofSpeechSynthesis || features.blockSpeechSynthesis) {
     if (typeof SpeechSynthesis !== "undefined" && globalThis.speechSynthesis) {
       try {
-        const _getVoices = SpeechSynthesis.prototype.getVoices;
+        const _getVoices = PG.speechGetVoices;
         SpeechSynthesis.prototype.getVoices = function () {
           if (features.blockSpeechSynthesis) return [];
 
