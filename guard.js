@@ -1989,21 +1989,18 @@
             0x9126, // DISJOINT_TIMER_QUERY_EXT (not core but common)
           ]);
 
-          const isWebGL2 = Ctor === globalThis.WebGL2RenderingContext;
-          const VALID_PARAMS = isWebGL2
-            ? new Set([...GL1_PARAMS, ...GL2_PARAMS])
-            : GL1_PARAMS;
-
           proto.getParameter = _pgMaskFnToString(function (param) {
             if (param === UNMASKED_VENDOR_WEBGL) return FAKE_VENDOR_STRING;
             if (param === UNMASKED_RENDERER_WEBGL) return FAKE_RENDERER_STRING;
 
-            if (!VALID_PARAMS.has(param)) return null;
-
+            if (typeof param !== "number" || !Number.isInteger(param)) {
+                return null;
+            }
+            
             return _getParam.apply(this, arguments);
           }, "getParameter");
         } catch (e) {}
-
+            
         try {
           const _readPx = proto.readPixels;
           proto.readPixels = _pgMaskFnToString(function (
