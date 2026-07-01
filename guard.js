@@ -1823,13 +1823,24 @@
 
         try {
           const _getParam = proto.getParameter;
+          const _getError = proto.getError;
+          const GL_INVALID_ENUM = 0x0500;
+          const GL_NO_ERROR = 0;
+
           proto.getParameter = _pgMaskFnToString(function (param) {
             if (param === UNMASKED_VENDOR_WEBGL) return FAKE_VENDOR_STRING;
             if (param === UNMASKED_RENDERER_WEBGL) return FAKE_RENDERER_STRING;
 
             if (param == null || (param | 0) !== +param) return null;
 
-            return _getParam.apply(this, arguments);
+            const result = _getParam.apply(this, arguments);
+            const err = _getError.call(this);
+            if (err === GL_INVALID_ENUM) {
+              while (_getError.call(this) !== GL_NO_ERROR) {}
+              return null;
+            }
+
+            return result;
           }, "getParameter");
         } catch (e) {}
 
