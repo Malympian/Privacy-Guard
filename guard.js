@@ -1313,6 +1313,40 @@
     const _toBlob = PG.canvasToBlob;
     const _ctx2dGetImageData = PG.ctx2dGetImageData;
 
+    try {
+      const _getCtx2d = HTMLCanvasElement.prototype.getContext;
+      HTMLCanvasElement.prototype.getContext = _pgMaskFnToString(function (
+        type,
+      ) {
+        if (String(type).toLowerCase() === "2d") {
+          const opts = { ...(arguments[1] || {}), willReadFrequently: true };
+          return _getCtx2d.call(this, type, opts);
+        }
+
+        return _getCtx2d.apply(this, arguments);
+      }, "getContext");
+    } catch (e) {
+      console.warn("[privacy-guard] willReadFrequently patch failed:", e);
+    }
+
+    if (typeof OffscreenCanvas !== "undefined") {
+      try {
+        const _getOcCtx2d = OffscreenCanvas.prototype.getContext;
+        OffscreenCanvas.prototype.getContext = _pgMaskFnToString(function (
+          type,
+        ) {
+          if (String(type).toLowerCase() === "2d") {
+            const opts = {
+              ...(arguments[1] || {}),
+              willReadFrequently: true,
+            };
+            return _getOcCtx2d.call(this, type, opts);
+          }
+          return _getOcCtx2d.apply(this, arguments);
+        }, "getContext");
+      } catch (e) {}
+    }
+
     if (features.blockCanvas) {
       try {
         HTMLCanvasElement.prototype.toDataURL = _pgMaskFnToString(function (
@@ -1392,10 +1426,173 @@
         return ((h >>> 0) / 0x100000000 - 0.5) * 1.5;
       }
 
+      const PG_MAC_ONLY_FONTS = new Set([
+        "helvetica neue",
+        "lucida grande",
+        "geneva",
+        "monaco",
+        "menlo",
+        "avenir",
+        "avenir next",
+        "avenir next condensed",
+        "american typewriter",
+        "andale mono",
+        "athelas",
+        "baskerville",
+        "big caslon",
+        "bodoni 72",
+        "chalkboard",
+        "chalkboard se",
+        "cochin",
+        "copperplate",
+        "didot",
+        "futura",
+        "geeza pro",
+        "gill sans",
+        "hiragino sans",
+        "hiragino kaku gothic pron",
+        "hoefler text",
+        "khmer sangam mn",
+        "kohinoor",
+        "lucida bright",
+        "marker felt",
+        "optima",
+        "palatino",
+        "papyrus",
+        "pingfang hk",
+        "pingfang sc",
+        "pingfang tc",
+        "rockwell",
+        "savoye let",
+        "sf compact display",
+        "sf compact text",
+        "sf mono",
+        "sf pro",
+        "sf pro display",
+        "sf pro text",
+        "skia",
+        "snell roundhand",
+        "superclarendon",
+        "trattatello",
+        "zapfino",
+        "apple color emoji",
+        "apple sd gothic neo",
+        ".applesystemuifont",
+        ".sf ns text",
+        ".sf ns display",
+        ".sf ns",
+      ]);
+
+      const PG_WIN_ONLY_FONTS = new Set([
+        "segoe ui",
+        "segoe ui historic",
+        "segoe ui emoji",
+        "segoe ui symbol",
+        "segoe print",
+        "segoe script",
+        "segoe mdl2 assets",
+        "calibri",
+        "cambria",
+        "cambria math",
+        "candara",
+        "constantia",
+        "consolas",
+        "corbel",
+        "franklin gothic medium",
+        "gabriola",
+        "leelawadee",
+        "leelawadee ui",
+        "lucida sans unicode",
+        "malgun gothic",
+        "microsoft himalaya",
+        "microsoft jheng hei",
+        "microsoft new tai lue",
+        "microsoft phags-pa",
+        "microsoft sans serif",
+        "microsoft tai le",
+        "microsoft uighur",
+        "microsoft yahei",
+        "microsoft yi baiti",
+        "mingliu",
+        "mongolian baiti",
+        "meiryo",
+        "ms gothic",
+        "ms mincho",
+        "ms pgothic",
+        "ms pmincho",
+        "ms ui gothic",
+        "nirmala ui",
+        "palatino linotype",
+        "simsun",
+        "sylfaen",
+        "tahoma",
+        "marlett",
+        "yu gothic",
+        "yu gothic ui",
+      ]);
+
+      const _pgRealIsWindows =
+        typeof _pgOnWindows !== "undefined"
+          ? _pgOnWindows
+          : /^Win/i.test(navigator.platform || "");
+      const PG_REAL_OS_FONTS = _pgRealIsWindows
+        ? PG_WIN_ONLY_FONTS
+        : PG_MAC_ONLY_FONTS;
+
+      function pgFontFamilies(fontShorthand) {
+        const str = String(fontShorthand || "");
+        const sizeMatch = str.match(
+          /\d[\d.]*(?:px|pt|em|rem|%)(?:\s*\/\s*[\d.]+(?:px|pt|em|rem|%|normal)?)?/i,
+        );
+        if (!sizeMatch) return null;
+        const prefix = str.slice(0, sizeMatch.index + sizeMatch[0].length);
+        const familyPart = str
+          .slice(sizeMatch.index + sizeMatch[0].length)
+          .trim();
+        const families = familyPart
+          .split(",")
+          .map((f) => f.trim().replace(/^["']|["']$/g, ""))
+          .filter(Boolean);
+        return { prefix, families };
+      }
+
+      function pgFallbackFontString(fontShorthand) {
+        if (!features.spoofNavigatorPlatform) return null;
+        const parsed = pgFontFamilies(fontShorthand);
+        if (!parsed || !parsed.families.length) return null;
+        if (!PG_REAL_OS_FONTS.has(parsed.families[0].toLowerCase()))
+          return null;
+
+        let i = 0;
+        while (
+          i < parsed.families.length &&
+          PG_REAL_OS_FONTS.has(parsed.families[i].toLowerCase())
+        ) {
+          i++;
+        }
+        const remaining = parsed.families.slice(i);
+        const familyStr = remaining.length
+          ? remaining.join(", ")
+          : "sans-serif";
+        return `${parsed.prefix} ${familyStr}`;
+      }
+
+      function pgMeasureRespectingPersona(ctx, nativeMeasure, text) {
+        const fallbackFont = pgFallbackFontString(ctx.font);
+        if (!fallbackFont) return nativeMeasure.call(ctx, text);
+        const originalFont = ctx.font;
+        try {
+          ctx.font = fallbackFont;
+          return nativeMeasure.call(ctx, text);
+        } finally {
+          ctx.font = originalFont;
+        }
+      }
+
       try {
         CanvasRenderingContext2D.prototype.getImageData = _pgMaskFnToString(
-          function (sx, sy, sw, sh, ...rest) {
-            const id = _ctx2dGetImageData.call(this, sx, sy, sw, sh, ...rest);
+          function () {
+            const id = _ctx2dGetImageData.apply(this, arguments);
             noisePixels(id.data);
             return id;
           },
@@ -1463,7 +1660,7 @@
         const _measureText = PG.ctx2dMeasureText;
         CanvasRenderingContext2D.prototype.measureText = _pgMaskFnToString(
           function (text) {
-            const m = _measureText.call(this, text);
+            const m = pgMeasureRespectingPersona(this, _measureText, text);
             const noise = pgFontNoise(this.font, text);
             return new Proxy(m, {
               get(t, prop) {
@@ -1489,7 +1686,7 @@
           OffscreenCanvasRenderingContext2D.prototype.measureText = function (
             text,
           ) {
-            const m = _ocMeasureText.call(this, text);
+            const m = pgMeasureRespectingPersona(this, _ocMeasureText, text);
             const noise = pgFontNoise(this.font, text);
             return new Proxy(m, {
               get(t, prop) {
@@ -1548,7 +1745,7 @@
 
   if (features.spoofWebGL || features.blockWebGL) {
     if (features.blockWebGL) {
-      const _getCtx = PG.canvasGetContext;
+      const _getCtx = HTMLCanvasElement.prototype.getContext;
       try {
         HTMLCanvasElement.prototype.getContext = _pgMaskFnToString(function (
           type,
@@ -1563,7 +1760,7 @@
         console.warn("[privacy-guard] blockWebGL canvas patch failed:", e);
       }
       if (typeof OffscreenCanvas !== "undefined") {
-        const _ocGetCtx = PG.offscreenGetContext;
+        const _ocGetCtx = OffscreenCanvas.prototype.getContext;
         try {
           OffscreenCanvas.prototype.getContext = _pgMaskFnToString(function (
             type,
@@ -1605,30 +1802,34 @@
         if (!Ctor?.prototype) continue;
         const proto = Ctor.prototype;
 
+        const UNMASKED_VENDOR_WEBGL = 0x9245;
+        const UNMASKED_RENDERER_WEBGL = 0x9246;
+        const FAKE_VENDOR_STRING = "Google Inc. (Intel)";
+        const FAKE_RENDERER_STRING =
+          "ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0, D3D11)";
+
         try {
           const _getExt = proto.getExtension;
           proto.getExtension = _pgMaskFnToString(function (name) {
-            if (name === "WEBGL_debug_renderer_info") return null;
+            if (name === "WEBGL_debug_renderer_info") {
+              return Object.freeze({
+                UNMASKED_VENDOR_WEBGL,
+                UNMASKED_RENDERER_WEBGL,
+              });
+            }
             return _getExt.call(this, name);
           }, "getExtension");
         } catch (e) {}
 
         try {
-          const _getSuppExt = proto.getSupportedExtensions;
-          proto.getSupportedExtensions = _pgMaskFnToString(function () {
-            const list = _getSuppExt.call(this);
-            if (!Array.isArray(list)) return list;
-            return list.filter((e) => e !== "WEBGL_debug_renderer_info");
-          }, "getSupportedExtensions");
-        } catch (e) {}
-
-        try {
           const _getParam = proto.getParameter;
           proto.getParameter = _pgMaskFnToString(function (param) {
-            if (param === 0x9245) return "Google Inc. (Intel)";
-            if (param === 0x9246)
-              return "ANGLE (Intel, Intel(R) UHD Graphics 630 Direct3D11 vs_5_0 ps_5_0, D3D11)";
-            return _getParam.call(this, param);
+            if (param === UNMASKED_VENDOR_WEBGL) return FAKE_VENDOR_STRING;
+            if (param === UNMASKED_RENDERER_WEBGL) return FAKE_RENDERER_STRING;
+
+            if (param == null || (param | 0) !== +param) return null;
+
+            return _getParam.apply(this, arguments);
           }, "getParameter");
         } catch (e) {}
 
@@ -2307,26 +2508,64 @@
       } catch {}
     }
 
+    const _realPlatformStr = (function () {
+      try {
+        const desc =
+          Object.getOwnPropertyDescriptor(Navigator.prototype, "platform") ||
+          Object.getOwnPropertyDescriptor(navigator, "platform");
+        return desc ? desc.get.call(navigator) : navigator.platform;
+      } catch {
+        return navigator.platform || "";
+      }
+    })();
+
+    const _pgOnWindows = /^Win/i.test(_realPlatformStr);
+
+    const _pgPersona = _pgOnWindows
+      ? {
+          uaReplace: (ua) =>
+            ua.replace(
+              /\(Windows NT[\d. ;]*(?:Win64;\s*x64\s*)?;?\s*(?:WOW64\s*;?\s*)?(?:rv:[\d.]+\s*)?\)/,
+              "(Macintosh; Intel Mac OS X 10_15_7)",
+            ),
+          platform: "MacIntel",
+          vendor: "Apple Computer, Inc.",
+          osName: "macOS",
+          osVersion: "10.15.7",
+          arch: "arm",
+          bitness: "64",
+        }
+      : {
+          uaReplace: (ua) =>
+            ua
+              .replace(
+                /Macintosh; Intel Mac OS X [\d_.]+/,
+                "Windows NT 10.0; Win64; x64",
+              )
+              .replace(/\(X11; Linux[^)]*\)/, "(Windows NT 10.0; Win64; x64)")
+              .replace(
+                /\(Linux; Android[^);]*;?[^)]*\)/,
+                "(Windows NT 10.0; Win64; x64)",
+              ),
+          platform: "Win32",
+          vendor: "Google Inc.",
+          osName: "Windows",
+          osVersion: "15.0.0",
+          arch: "x86",
+          bitness: "64",
+        };
+
     try {
       const _realUA = navigator.userAgent;
-      const _pgFakeUA = _realUA
-        .replace(
-          /Macintosh; Intel Mac OS X [\d_]+/,
-          "Windows NT 10.0; Win64; x64",
-        )
-        .replace(/\(X11; Linux[^)]*\)/, "(Windows NT 10.0; Win64; x64)")
-        .replace(
-          /\(Linux; Android[^);]*;?[^)]*\)/,
-          "(Windows NT 10.0; Win64; x64)",
-        );
+      const _pgFakeUA = _pgPersona.uaReplace(_realUA);
       const _pgFakeAppVersion = _pgFakeUA.replace(/^Mozilla\//, "");
 
       pgDefineGetter(navigator, "userAgent", () => _pgFakeUA);
       pgDefineGetter(navigator, "appVersion", () => _pgFakeAppVersion);
     } catch {}
 
-    pgDefineGetter(navigator, "platform", () => "Win32");
-    pgDefineGetter(navigator, "vendor", () => "Google Inc.");
+    pgDefineGetter(navigator, "platform", () => _pgPersona.platform);
+    pgDefineGetter(navigator, "vendor", () => _pgPersona.vendor);
 
     try {
       if (navigator.userAgentData) {
@@ -2350,17 +2589,17 @@
         const _pgUAData = {
           brands: _pgBrands,
           mobile: false,
-          platform: "Windows",
+          platform: _pgPersona.osName,
           getHighEntropyValues: async function () {
             return {
-              architecture: "x86",
-              bitness: "64",
+              architecture: _pgPersona.arch,
+              bitness: _pgPersona.bitness,
               brands: _pgBrands,
               fullVersionList: _pgFullVersionList,
               mobile: false,
               model: "",
-              platform: "Windows",
-              platformVersion: "15.0.0",
+              platform: _pgPersona.osName,
+              platformVersion: _pgPersona.osVersion,
               uaFullVersion: _pgFullVer,
             };
           },
