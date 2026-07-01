@@ -1989,13 +1989,15 @@
             0x9126, // DISJOINT_TIMER_QUERY_EXT (not core but common)
           ]);
 
-          proto.getParameter = _pgMaskFnToString(function (param) {
+         proto.getParameter = _pgMaskFnToString(function (param) {
             if (param === UNMASKED_VENDOR_WEBGL) return FAKE_VENDOR_STRING;
             if (param === UNMASKED_RENDERER_WEBGL) return FAKE_RENDERER_STRING;
 
             if (typeof param !== "number" || !Number.isInteger(param)) {
                 return null;
             }
+            
+            console.warn("[WebGL Debug] Native driver receiving param:", param);
             
             return _getParam.apply(this, arguments);
           }, "getParameter");
