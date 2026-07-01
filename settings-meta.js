@@ -306,7 +306,7 @@ const SETTINGS_META = [
   {
     key: "spoofNavigatorPlatform",
     label: "Spoof OS platform & browser vendor",
-    hint: "Returns 'Win32' for navigator.platform, 'Google Inc.' for navigator.vendor, and generic Windows/Chrome values for the User-Agent Client Hints JS API (navigator.userAgentData). All three expose your real OS and hardware class to page scripts — separate from the HTTP User-Agent header.",
+    hint: "Returns 'Win32' for navigator.platform, 'Google Inc.' for navigator.vendor, and generic Windows/Chrome values for the User-Agent Client Hints JS API (navigator.userAgentData) — and rewrites the actual HTTP User-Agent header plus the Sec-CH-UA-* Client Hints request headers to match, so the OS a site sees is consistent at both the JavaScript and network level.",
   },
   {
     key: "spoofLanguage",
