@@ -128,15 +128,20 @@ function refreshBadge() {
   });
 }
 async function readSync() {
-  return chrome.storage.sync.get({
-    enabled: true,
-    allowlist: [],
-    features: { ...DEFAULT_FEATURES },
-    siteOverrides: {},
-    customPatterns: [],
-    exceptions: [],
-    blockedDomains: [],
-  });
+  const [sync, local] = await Promise.all([
+    chrome.storage.sync.get({
+      enabled: true,
+      allowlist: [],
+      features: { ...DEFAULT_FEATURES },
+    }),
+    chrome.storage.local.get({
+      siteOverrides: {},
+      customPatterns: [],
+      exceptions: [],
+      blockedDomains: [],
+    }),
+  ]);
+  return { ...sync, ...local };
 }
 async function readSession() {
   return chrome.storage.session.get({ tabSession: {}, snoozeUntil: 0 });
@@ -647,7 +652,7 @@ function renderFeaturesInto(containerEl, keysFilter, sync) {
                 ...updates,
               };
               so[currentHost] = entry;
-              await chrome.storage.sync.set({ siteOverrides: so });
+              await chrome.storage.local.set({ siteOverrides: so });
               siteCustomEl.checked = true;
             } else {
               await chrome.storage.sync.set({
@@ -685,7 +690,7 @@ function renderFeaturesInto(containerEl, keysFilter, sync) {
           ...allUpdates,
         };
         so[currentHost] = entry;
-        await chrome.storage.sync.set({ siteOverrides: so });
+        await chrome.storage.local.set({ siteOverrides: so });
         siteCustomEl.checked = true;
       } else {
         await chrome.storage.sync.set({
@@ -1354,7 +1359,7 @@ siteCustomEl.addEventListener("change", async () => {
     delete so[currentHost];
     editingSiteCustom = false;
   }
-  await chrome.storage.sync.set({ siteOverrides: so });
+  await chrome.storage.local.set({ siteOverrides: so });
   renderFeatures(await readSync());
 
   if (siteCustomEl.checked) showSettingsNotice();
@@ -1474,7 +1479,7 @@ document
     }
 
     const next = [...patterns].sort();
-    await chrome.storage.sync.set({ customPatterns: next });
+    await chrome.storage.local.set({ customPatterns: next });
     discoverStatEl.textContent = `${added} pattern${added !== 1 ? "s" : ""} added — reload tab to apply.`;
     discoverStatEl.className = "scan-msg ok";
     showReloadNotice();
