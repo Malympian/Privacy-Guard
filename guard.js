@@ -1827,20 +1827,180 @@
           const GL_INVALID_ENUM = 0x0500;
           const GL_NO_ERROR = 0;
 
+          const GL1_PARAMS = new Set([
+            0x0b21, // LINE_WIDTH
+            0x0b44, // CULL_FACE
+            0x0b45, // CULL_FACE_MODE
+            0x0b46, // FRONT_FACE
+            0x0b70, // DEPTH_RANGE
+            0x0b71, // DEPTH_TEST
+            0x0b72, // DEPTH_WRITEMASK
+            0x0b73, // DEPTH_CLEAR_VALUE
+            0x0b74, // DEPTH_FUNC
+            0x0b90, // STENCIL_TEST
+            0x0b91, // STENCIL_CLEAR_VALUE
+            0x0b92, // STENCIL_FUNC
+            0x0b93, // STENCIL_VALUE_MASK
+            0x0b94, // STENCIL_FAIL
+            0x0b95, // STENCIL_PASS_DEPTH_FAIL
+            0x0b96, // STENCIL_PASS_DEPTH_PASS
+            0x0b97, // STENCIL_REF
+            0x0b98, // STENCIL_WRITEMASK
+            0x0ba2, // VIEWPORT
+            0x0be0, // BLEND_DST_RGB (alias BLEND_DST)
+            0x0be1, // BLEND_SRC_RGB (alias BLEND_SRC)
+            0x0be2, // BLEND
+            0x0c10, // SCISSOR_BOX
+            0x0c11, // SCISSOR_TEST
+            0x0c22, // COLOR_CLEAR_VALUE
+            0x0c23, // COLOR_WRITEMASK
+            0x0cf5, // UNPACK_ALIGNMENT
+            0x0d05, // PACK_ALIGNMENT
+            0x0d33, // MAX_TEXTURE_SIZE
+            0x0d3a, // MAX_VIEWPORT_DIMS
+            0x0d50, // SUBPIXEL_BITS
+            0x0d52, // RED_BITS
+            0x0d53, // GREEN_BITS
+            0x0d54, // BLUE_BITS
+            0x0d55, // ALPHA_BITS
+            0x0d56, // DEPTH_BITS
+            0x0d57, // STENCIL_BITS
+            0x0e02, // POLYGON_OFFSET_UNITS
+            0x2a00, // POLYGON_OFFSET_FACTOR
+            0x2a01, // POLYGON_OFFSET_FILL
+            0x3000, // TEXTURE_BINDING_2D
+            0x3006, // ACTIVE_TEXTURE
+            0x8005, // BLEND_COLOR
+            0x8006, // BLEND_EQUATION (BLEND_EQUATION_RGB)
+            0x8007, // BLEND_EQUATION_ALPHA
+            0x8009, // DRAW_BUFFER0 (read framebuffer)
+            0x800a, // BLEND_DST_ALPHA
+            0x800b, // BLEND_SRC_ALPHA
+            0x8037, // POLYGON_OFFSET_LINE (not in WebGL but harmless)
+            0x8038, // POLYGON_OFFSET_POINT
+            0x8069, // TEXTURE_BINDING_CUBE_MAP
+            0x80a8, // SAMPLE_COVERAGE_INVERT
+            0x80a9, // SAMPLE_COVERAGE_VALUE
+            0x80aa, // SAMPLE_COVERAGE
+            0x80ab, // SAMPLE_ALPHA_TO_COVERAGE
+            0x84e0, // ACTIVE_TEXTURE (duplicate alias)
+            0x84e8, // MAX_RENDERBUFFER_SIZE
+            0x8513, // TEXTURE_BINDING_CUBE_MAP (alias)
+            0x8514, // SAMPLE_BUFFERS
+            0x8515, // SAMPLES
+            0x851c, // PACK_INVERT_MESA (ignore if unsupported)
+            0x8622, // VERTEX_ATTRIB_ARRAY_ENABLED
+            0x86a3, // NUM_COMPRESSED_TEXTURE_FORMATS
+            0x86a4, // COMPRESSED_TEXTURE_FORMATS
+            0x8741, // CURRENT_PROGRAM
+            0x8764, // BUFFER_BINDING (ARRAY_BUFFER_BINDING)
+            0x8765, // ELEMENT_ARRAY_BUFFER_BINDING
+            0x8800, // STENCIL_BACK_FUNC
+            0x8801, // STENCIL_BACK_FAIL
+            0x8802, // STENCIL_BACK_PASS_DEPTH_FAIL
+            0x8803, // STENCIL_BACK_PASS_DEPTH_PASS
+            0x8824, // MAX_DRAW_BUFFERS
+            0x8825, // DRAW_BUFFER0..15 (0x8825–0x8834)
+            0x8826,
+            0x8827,
+            0x8828,
+            0x8829,
+            0x882a,
+            0x882b,
+            0x882c,
+            0x882d,
+            0x882e,
+            0x882f,
+            0x8830,
+            0x8831,
+            0x8832,
+            0x8833,
+            0x8834,
+            0x8869, // MAX_VERTEX_ATTRIBS
+            0x8871, // MAX_VERTEX_UNIFORM_VECTORS
+            0x8872, // MAX_VARYING_VECTORS
+            0x8873, // MAX_COMBINED_TEXTURE_IMAGE_UNITS
+            0x8874, // MAX_VERTEX_TEXTURE_IMAGE_UNITS
+            0x8dfb, // MAX_FRAGMENT_UNIFORM_VECTORS
+            0x8dfc, // MAX_TEXTURE_IMAGE_UNITS
+            0x8df8, // SHADER_COMPILER (always true in WebGL)
+            0x8df9, // MAX_VERTEX_UNIFORM_VECTORS (alias)
+            0x84e1, // MAX_TEXTURE_IMAGE_UNITS (alias)
+            0x8b4d, // MAX_VERTEX_UNIFORM_COMPONENTS
+            0x8b49, // MAX_FRAGMENT_UNIFORM_COMPONENTS
+            0x8b4c, // MAX_VARYING_COMPONENTS (alias)
+            0x8897, // ARRAY_BUFFER_BINDING
+            0x8895, // ELEMENT_ARRAY_BUFFER_BINDING (alias)
+            0x88ed, // PIXEL_PACK_BUFFER_BINDING
+            0x88ef, // PIXEL_UNPACK_BUFFER_BINDING
+            0x8ca3, // STENCIL_BACK_REF
+            0x8ca4, // STENCIL_BACK_VALUE_MASK
+            0x8ca5, // STENCIL_BACK_WRITEMASK
+            0x8ca6, // FRAMEBUFFER_BINDING
+            0x8d40, // RENDERBUFFER_BINDING
+            0x8d57, // MAX_SAMPLES
+            0x9245, // UNMASKED_VENDOR_WEBGL (handled above)
+            0x9246, // UNMASKED_RENDERER_WEBGL (handled above)
+          ]);
+
+          // WebGL2-only additions (from WebGL 2.0 spec §3.7.2):
+          const GL2_PARAMS = new Set([
+            0x0d02, // READ_BUFFER
+            0x8005, // already in GL1
+            0x821b, // MAJOR_VERSION
+            0x821c, // MINOR_VERSION
+            0x8230, // FRAGMENT_SHADER_DERIVATIVE_HINT
+            0x8514, // already in GL1
+            0x8517, // TEXTURE_BINDING_3D
+            0x8645, // VERTEX_ARRAY_BINDING
+            0x8694, // ACTIVE_UNIFORM_BLOCK_MAX_NAME_LENGTH
+            0x8695, // MAX_VERTEX_UNIFORM_BLOCKS
+            0x8697, // MAX_FRAGMENT_UNIFORM_BLOCKS
+            0x8698, // MAX_COMBINED_UNIFORM_BLOCKS
+            0x8699, // MAX_UNIFORM_BUFFER_BINDINGS
+            0x8a28, // MAX_UNIFORM_BLOCK_SIZE
+            0x8a29, // MAX_COMBINED_VERTEX_UNIFORM_COMPONENTS
+            0x8a2a, // MAX_COMBINED_FRAGMENT_UNIFORM_COMPONENTS
+            0x8a2b, // UNIFORM_BUFFER_OFFSET_ALIGNMENT
+            0x8a2c, // ACTIVE_UNIFORM_BLOCKS
+            0x8c2a, // MAX_ARRAY_TEXTURE_LAYERS
+            0x8c29, // MAX_COLOR_ATTACHMENTS
+            0x8cdf, // MAX_SAMPLES (already in GL1)
+            0x8d57, // already in GL1
+            0x8e8c, // TRANSFORM_FEEDBACK_BUFFER_BINDING
+            0x8e8d, // TRANSFORM_FEEDBACK_BUFFER_SIZE
+            0x8e8f, // TRANSFORM_FEEDBACK_BUFFER_START
+            0x8e96, // MAX_TRANSFORM_FEEDBACK_INTERLEAVED_COMPONENTS
+            0x8e97, // MAX_TRANSFORM_FEEDBACK_SEPARATE_ATTRIBS
+            0x8e98, // MAX_TRANSFORM_FEEDBACK_SEPARATE_COMPONENTS
+            0x8ead, // RASTERIZER_DISCARD
+            0x8f36, // COPY_READ_BUFFER_BINDING
+            0x8f37, // COPY_WRITE_BUFFER_BINDING
+            0x8f9e, // UNIFORM_BUFFER_BINDING
+            0x9111, // MAX_ELEMENT_INDEX
+            0x9122, // MAX_SERVER_WAIT_TIMEOUT
+            0x9135, // TEXTURE_BINDING_2D_ARRAY
+            0x92d2, // DRAW_FRAMEBUFFER_BINDING
+            0x92d3, // READ_FRAMEBUFFER_BINDING
+            0x92d4, // TRANSFORM_FEEDBACK_BINDING
+            0x92d5, // MAX_VERTEX_OUTPUT_COMPONENTS
+            0x9300, // MIN_PROGRAM_TEXEL_OFFSET
+            0x9301, // MAX_PROGRAM_TEXEL_OFFSET
+            0x9126, // DISJOINT_TIMER_QUERY_EXT (not core but common)
+          ]);
+
+          const isWebGL2 = Ctor === globalThis.WebGL2RenderingContext;
+          const VALID_PARAMS = isWebGL2
+            ? new Set([...GL1_PARAMS, ...GL2_PARAMS])
+            : GL1_PARAMS;
+
           proto.getParameter = _pgMaskFnToString(function (param) {
             if (param === UNMASKED_VENDOR_WEBGL) return FAKE_VENDOR_STRING;
             if (param === UNMASKED_RENDERER_WEBGL) return FAKE_RENDERER_STRING;
 
-            if (param == null || (param | 0) !== +param) return null;
+            if (!VALID_PARAMS.has(param)) return null;
 
-            const result = _getParam.apply(this, arguments);
-            const err = _getError.call(this);
-            if (err === GL_INVALID_ENUM) {
-              while (_getError.call(this) !== GL_NO_ERROR) {}
-              return null;
-            }
-
-            return result;
+            return _getParam.apply(this, arguments);
           }, "getParameter");
         } catch (e) {}
 
