@@ -108,12 +108,6 @@ function categoryForDomain(domain) {
   return null;
 }
 
-// Hostname *labels* (the parts between dots) that are a strong signal of a
-// dedicated telemetry endpoint regardless of which company's domain they
-// live under — e.g. "pixel-config.reddit.com" or "ups.analytics.yahoo.com".
-// Kept intentionally short and high-precision: words like "track" or
-// "stats" are deliberately excluded because they collide with legitimate
-// functional subdomains (package tracking, public stats pages, etc).
 const TRACKER_HOSTNAME_HINTS = [
   "analytics",
   "telemetry",
@@ -191,6 +185,183 @@ function mergeFeatures(globalFeatures, siteEntry) {
   return base;
 }
 
+function buildFakePersonaHeaders() {
+  const realPlatform = navigator.platform || "";
+  const onWindows = /^Win/i.test(realPlatform);
+
+  const realUA = navigator.userAgent;
+  let fakeUA, fakePlatform, fakeOSVersion, fakeArch;
+
+  if (onWindows) {
+    fakeUA = realUA.replace(
+      /\(Windows NT[\d. ;]*(?:Win64;\s*x64\s*)?;?\s*(?:WOW64\s*;?\s*)?(?:rv:[\d.]+\s*)?\)/,
+      "(Macintosh; Intel Mac OS X 10_15_7)",
+    );
+    fakePlatform = "macOS";
+    fakeOSVersion = "10.15.7";
+    fakeArch = "arm";
+  } else {
+    fakeUA = realUA
+      .replace(
+        /Macintosh; Intel Mac OS X [\d_.]+/,
+        "Windows NT 10.0; Win64; x64",
+      )
+      .replace(/\(X11; Linux[^)]*\)/, "(Windows NT 10.0; Win64; x64)")
+      .replace(
+        /\(Linux; Android[^);]*;?[^)]*\)/,
+        "(Windows NT 10.0; Win64; x64)",
+      );
+    fakePlatform = "Windows";
+    fakeOSVersion = "15.0.0";
+    fakeArch = "x86";
+  }
+
+  const chromeMatch = fakeUA.match(/Chrome\/(\d+)/);
+  const chromeMajor = chromeMatch ? chromeMatch[1] : "124";
+  const fullVersion = `${chromeMajor}.0.0.0`;
+
+  const brandList = `"Not)A;Brand";v="99", "Google Chrome";v="${chromeMajor}", "Chromium";v="${chromeMajor}"`;
+  const fullVersionList = `"Not)A;Brand";v="99.0.0.0", "Google Chrome";v="${fullVersion}", "Chromium";v="${fullVersion}"`;
+
+  return [
+    { header: "User-Agent", operation: "set", value: fakeUA },
+    { header: "Sec-CH-UA", operation: "set", value: brandList },
+    { header: "Sec-CH-UA-Mobile", operation: "set", value: "?0" },
+    {
+      header: "Sec-CH-UA-Platform",
+      operation: "set",
+      value: `"${fakePlatform}"`,
+    },
+    {
+      header: "Sec-CH-UA-Platform-Version",
+      operation: "set",
+      value: `"${fakeOSVersion}"`,
+    },
+    { header: "Sec-CH-UA-Arch", operation: "set", value: `"${fakeArch}"` },
+    { header: "Sec-CH-UA-Bitness", operation: "set", value: '"64"' },
+    {
+      header: "Sec-CH-UA-Full-Version",
+      operation: "set",
+      value: `"${fullVersion}"`,
+    },
+    {
+      header: "Sec-CH-UA-Full-Version-List",
+      operation: "set",
+      value: fullVersionList,
+    },
+    { header: "Sec-CH-UA-Model", operation: "set", value: '""' },
+  ];
+}
+
+function stripAllowlistWildcard(entry) {
+  let rule = entry.trim().toLowerCase();
+  if (rule.startsWith("*.")) rule = rule.slice(2);
+  return rule;
+}
+
+const PG_DOMAIN_UA_RULE_ID = 1;
+
+async function collectSpoofedDomains() {
+  const sync = await chrome.storage.sync.get({
+    enabled: true,
+    allowlist: [],
+    features: DEFAULT_FEATURES,
+  });
+  if (!sync.enabled) return [];
+
+  const local = await chrome.storage.local.get({ siteOverrides: {} });
+  const overrides = local.siteOverrides ?? {};
+
+  const domains = new Set();
+  for (const entry of sync.allowlist ?? []) {
+    const host = stripAllowlistWildcard(entry);
+    if (!host) continue;
+    const merged = mergeFeatures(sync.features, overrides[host]);
+    if (merged.spoofNavigatorPlatform) domains.add(host);
+  }
+
+  for (const [host, entry] of Object.entries(overrides)) {
+    const merged = mergeFeatures(sync.features, entry);
+    if (merged.spoofNavigatorPlatform) domains.add(host);
+    else domains.delete(host);
+  }
+  return [...domains];
+}
+
+async function rebuildDomainHeaderRules() {
+  if (!chrome.declarativeNetRequest) return;
+  const domains = await collectSpoofedDomains();
+  const addRules = domains.length
+    ? [
+        {
+          id: PG_DOMAIN_UA_RULE_ID,
+          priority: 1,
+          action: {
+            type: "modifyHeaders",
+            requestHeaders: buildFakePersonaHeaders(),
+          },
+          condition: { requestDomains: domains },
+        },
+      ]
+    : [];
+  try {
+    await chrome.declarativeNetRequest.updateDynamicRules({
+      removeRuleIds: [PG_DOMAIN_UA_RULE_ID],
+      addRules,
+    });
+  } catch (e) {
+    console.warn("[privacy-guard] failed to update UA header rules:", e);
+  }
+}
+
+const PG_TAB_UA_RULE_BASE = 1000;
+
+async function rebuildTabHeaderRules() {
+  if (!chrome.declarativeNetRequest) return;
+
+  const [sync, local, session] = await Promise.all([
+    chrome.storage.sync.get({ enabled: true, features: DEFAULT_FEATURES }),
+    chrome.storage.local.get({ siteOverrides: {} }),
+    chrome.storage.session.get({ tabSession: {} }),
+  ]);
+  const overrides = local.siteOverrides ?? {};
+
+  const removeRuleIds = [];
+  const addRules = [];
+  for (const [tabIdStr, info] of Object.entries(session.tabSession ?? {})) {
+    const tabId = Number(tabIdStr);
+    if (!Number.isFinite(tabId)) continue;
+    const ruleId = PG_TAB_UA_RULE_BASE + tabId;
+    removeRuleIds.push(ruleId);
+
+    if (!sync.enabled || info?.mode !== "active" || !info?.hostname) continue;
+    const merged = mergeFeatures(sync.features, overrides[info.hostname]);
+    if (!merged.spoofNavigatorPlatform) continue;
+
+    addRules.push({
+      id: ruleId,
+      priority: 1,
+      action: {
+        type: "modifyHeaders",
+        requestHeaders: buildFakePersonaHeaders(),
+      },
+      condition: { tabIds: [tabId] },
+    });
+  }
+
+  try {
+    await chrome.declarativeNetRequest.updateSessionRules({
+      removeRuleIds,
+      addRules,
+    });
+  } catch (e) {
+    console.warn(
+      "[privacy-guard] failed to update per-tab UA header rules:",
+      e,
+    );
+  }
+}
+
 function getBlockedPatterns(sync) {
   const custom = (sync.customPatterns ?? [])
     .map((p) => p.trim())
@@ -217,22 +388,27 @@ function getExceptions(sync) {
 function exceptionPatternFromUrl(rawUrl) {
   try {
     const u = new URL(rawUrl);
-    return u.origin + u.pathname; // e.g. "https://example.com/events"
+    return u.origin + u.pathname;
   } catch {
     return rawUrl;
   }
 }
 
 async function getInjectDecision(hostname, tabId) {
-  const sync = await chrome.storage.sync.get({
-    enabled: true,
-    allowlist: [],
-    features: DEFAULT_FEATURES,
-    siteOverrides: {},
-    customPatterns: [],
-    exceptions: [],
-    blockedDomains: [],
-  });
+  const [syncPrefs, localPrefs] = await Promise.all([
+    chrome.storage.sync.get({
+      enabled: true,
+      allowlist: [],
+      features: DEFAULT_FEATURES,
+    }),
+    chrome.storage.local.get({
+      siteOverrides: {},
+      customPatterns: [],
+      exceptions: [],
+      blockedDomains: [],
+    }),
+  ]);
+  const sync = { ...syncPrefs, ...localPrefs };
 
   const session = await chrome.storage.session.get({
     tabSession: {},
@@ -433,12 +609,15 @@ async function recordBlock(tabId, url) {
 async function recordObserve(tabId, detail) {
   if (tabId == null || !detail?.url) return;
 
-  const sync = await chrome.storage.sync.get({
-    customPatterns: [],
-    exceptions: [],
-    blockedDomains: [],
-    features: DEFAULT_FEATURES,
-  });
+  const [syncPrefs, localPrefs] = await Promise.all([
+    chrome.storage.sync.get({ features: DEFAULT_FEATURES }),
+    chrome.storage.local.get({
+      customPatterns: [],
+      exceptions: [],
+      blockedDomains: [],
+    }),
+  ]);
+  const sync = { ...syncPrefs, ...localPrefs };
   const features = { ...DEFAULT_FEATURES, ...sync.features };
   const allPatterns = getBlockedPatterns(sync);
   const exceptions = getExceptions(sync);
@@ -536,31 +715,44 @@ async function clearTabDataOnNavigate(tabId) {
 }
 
 chrome.runtime.onInstalled.addListener(async () => {
-  const sync = await chrome.storage.sync.get({
-    enabled: null,
-    allowlist: null,
-    features: null,
-    siteOverrides: null,
-    customPatterns: null,
-    exceptions: null,
-    blockedDomains: null,
-  });
-  const patch = {};
-  if (sync.enabled === null) patch.enabled = true;
-  if (sync.allowlist === null) patch.allowlist = [];
-  if (sync.features === null) patch.features = DEFAULT_FEATURES;
-  if (sync.siteOverrides === null) patch.siteOverrides = {};
-  if (sync.customPatterns === null) patch.customPatterns = [];
-  if (sync.exceptions === null) patch.exceptions = [];
-  if (sync.blockedDomains === null) patch.blockedDomains = [];
-  if (Object.keys(patch).length) await chrome.storage.sync.set(patch);
+  const [sync, local] = await Promise.all([
+    chrome.storage.sync.get({
+      enabled: null,
+      allowlist: null,
+      features: null,
+    }),
+    chrome.storage.local.get({
+      siteOverrides: null,
+      customPatterns: null,
+      exceptions: null,
+      blockedDomains: null,
+    }),
+  ]);
+  const syncPatch = {};
+  if (sync.enabled === null) syncPatch.enabled = true;
+  if (sync.allowlist === null) syncPatch.allowlist = [];
+  if (sync.features === null) syncPatch.features = DEFAULT_FEATURES;
+  if (Object.keys(syncPatch).length) await chrome.storage.sync.set(syncPatch);
+
+  const localPatch = {};
+  if (local.siteOverrides === null) localPatch.siteOverrides = {};
+  if (local.customPatterns === null) localPatch.customPatterns = [];
+  if (local.exceptions === null) localPatch.exceptions = [];
+  if (local.blockedDomains === null) localPatch.blockedDomains = [];
+  if (Object.keys(localPatch).length)
+    await chrome.storage.local.set(localPatch);
+
   await preloadStatusBitmaps();
   await refreshAllBadges();
+  await rebuildDomainHeaderRules();
+  await rebuildTabHeaderRules();
 });
 
 chrome.runtime.onStartup.addListener(async () => {
   await preloadStatusBitmaps();
   await refreshAllBadges();
+  await rebuildDomainHeaderRules();
+  await rebuildTabHeaderRules();
 });
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -665,9 +857,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         return;
       }
 
-      const sync = await chrome.storage.sync.get({ exceptions: [] });
-      const exceptions = [...new Set([...(sync.exceptions ?? []), pattern])];
-      await chrome.storage.sync.set({ exceptions });
+      const local = await chrome.storage.local.get({ exceptions: [] });
+      const exceptions = [...new Set([...(local.exceptions ?? []), pattern])];
+      await chrome.storage.local.set({ exceptions });
       await refreshAllBadges();
       sendResponse({ ok: true, pattern });
     })();
@@ -676,11 +868,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
   if (msg.type === "removeException") {
     (async () => {
-      const sync = await chrome.storage.sync.get({ exceptions: [] });
-      const exceptions = (sync.exceptions ?? []).filter(
+      const local = await chrome.storage.local.get({ exceptions: [] });
+      const exceptions = (local.exceptions ?? []).filter(
         (e) => e !== msg.pattern,
       );
-      await chrome.storage.sync.set({ exceptions });
+      await chrome.storage.local.set({ exceptions });
       await refreshAllBadges();
       sendResponse({ ok: true });
     })();
@@ -688,14 +880,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   }
 
   if (msg.type === "getExceptions") {
-    chrome.storage.sync.get({ exceptions: [] }).then((sync) => {
-      sendResponse({ exceptions: sync.exceptions ?? [] });
+    chrome.storage.local.get({ exceptions: [] }).then((local) => {
+      sendResponse({ exceptions: local.exceptions ?? [] });
     });
     return true;
   }
 
   if (msg.type === "getTrackerMeta") {
-    chrome.storage.sync
+    chrome.storage.local
       .get({ customPatterns: [], blockedDomains: [] })
       .then((sync) => {
         sendResponse({
@@ -756,5 +948,13 @@ chrome.tabs.onUpdated.addListener((tabId, info) => {
 });
 
 chrome.storage.onChanged.addListener((_, area) => {
-  if (area === "sync" || area === "session") refreshAllBadges().catch(() => {});
+  if (area === "sync" || area === "session" || area === "local") {
+    refreshAllBadges().catch(() => {});
+  }
+  if (area === "sync" || area === "local") {
+    rebuildDomainHeaderRules().catch(() => {});
+  }
+  if (area === "session" || area === "sync" || area === "local") {
+    rebuildTabHeaderRules().catch(() => {});
+  }
 });
