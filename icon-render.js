@@ -171,7 +171,7 @@ async function buildActionIconImageData(_status, blockCount) {
   const imageData = {};
   for (const size of ICON_SIZES) {
     const canvas = new OffscreenCanvas(size, size);
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
     drawLockIcon(ctx, size);
     if (blockCount > 0) drawBlockCount(ctx, size, blockCount);
     imageData[size] = ctx.getImageData(0, 0, size, size);
