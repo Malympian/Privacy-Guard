@@ -3,7 +3,7 @@
   "name": "Privacy Guard",
   "version": "1.6.0",
   "description": "Blocks common tracking beacons and spoofs behavioral event signals on allowed sites only.",
-  "permissions": ["storage", "tabs", "scripting"],
+  "permissions": ["storage", "tabs", "scripting", "declarativeNetRequest"],
   "host_permissions": ["<all_urls>"],
   "action": {
     "default_title": "Privacy Guard — pin this icon to see the status dot",
